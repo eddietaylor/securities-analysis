@@ -1,0 +1,13 @@
+name: securities-analysis
+channels:
+- defaults
+dependencies:
+  - jupyter
+  - pandas
+  - seaborn
+  - matplotlib
+  - pip
+  - pip:
+     - plotly
+     - yfinance
+     - statsmodels
