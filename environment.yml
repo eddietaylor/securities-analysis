@@ -1,11 +1,13 @@
 name: securities-analysis
 channels:
-- defaults
+  - conda-forge
+  - defaults
 dependencies:
   - jupyter
   - pandas
   - seaborn
   - matplotlib
+  - pytables  
   - pip
   - pip:
      - plotly
