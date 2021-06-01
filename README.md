@@ -15,3 +15,7 @@ to install all the dependencies into an isolated environment.
 Activate the environment by running:
 
     conda activate securities-analysis
+
+Update the environment with a new package by adding it in the YAML file and while in same directory as environment.yml, activate the environment, and run:
+
+    conda env update -f environment.yml
