@@ -5,6 +5,8 @@ channels:
 dependencies:
   - jupyter
   - pandas
+  - numpy
+  - scikit-learn  
   - seaborn
   - matplotlib
   - pytables  
@@ -13,4 +15,4 @@ dependencies:
      - plotly
      - yfinance
      - statsmodels
-     - quandl  
+     - quandl
