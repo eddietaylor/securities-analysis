@@ -1,0 +1,20 @@
+Things to consider in a model:
+
+1- high frequency traders
+2- inflation
+3- housing market
+4- bonds
+5- cryptos
+6- bubbles/crashes (long: tech bubble, medium:2008?, flash crash: 2010, 2015), corona?
+7- media
+8- tweets, google search, and ...
+9- you have to beat buy and hold policy, and a naive high frequncy agent buying based on recent history and in random
+10- portfolio 
+11- emerging tech and their competition, IPOs
+12- debt (Greece, ...)
+13- ETF
+14- historical data (adjustyed for splits and inflation)
+16- quarterly reports
+
+
+
