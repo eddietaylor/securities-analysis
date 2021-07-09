@@ -14,7 +14,7 @@ Things to consider in a model:
 12- debt (Greece, ...)
 13- ETF
 14- historical data (adjustyed for splits and inflation)
-16- quarterly reports
+15- quarterly reports
 
 
 
