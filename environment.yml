@@ -16,3 +16,4 @@ dependencies:
      - yfinance
      - statsmodels
      - quandl
+     - cpi  
