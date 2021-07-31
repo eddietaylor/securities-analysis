@@ -16,4 +16,7 @@ dependencies:
      - yfinance
      - statsmodels
      - quandl
-     - cpi  
+     - cpi
+     - praw
+     - ipykernel
+     - textblob  

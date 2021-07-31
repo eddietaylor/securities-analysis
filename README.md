@@ -1,8 +1,8 @@
 # securities-analysis
 
-Repo to develop securities analysis libraries inspired by various schools of financial and modelling thought including technical analysis, fundamental analysis, quantitative analysis, and machine learning.
+Repo to develop securities analysis libraries driven by different schools of financial and modelling thought including technical analysis, fundamental analysis, quantitative analysis, and machine learning.
 
-Ideally, this library will additionally include a backtester as well as the ability to connect to a trading api and deploy to a cloud.
+This library will possibly include a backtester as well as the ability to connect to a trading api and deploy to a cloud. This effort is currently in the research phase so the scope has not been clearly defined yet. 
 
 ## Installing the dependencies
 
@@ -19,3 +19,7 @@ Activate the environment by running:
 Update the environment with a new package by adding it in the YAML file and while in same directory as environment.yml, activate the environment, and run:
 
     conda env update -f environment.yml
+
+## Useful Links
+
+Python Reddit API Wrapper: https://praw.readthedocs.io/en/stable/index.html
