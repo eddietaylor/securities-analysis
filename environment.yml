@@ -19,4 +19,5 @@ dependencies:
      - cpi
      - praw
      - ipykernel
-     - textblob  
+     - textblob
+     - python-binance  

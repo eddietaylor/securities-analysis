@@ -23,3 +23,5 @@ Update the environment with a new package by adding it in the YAML file and whil
 ## Useful Links
 
 Python Reddit API Wrapper: https://praw.readthedocs.io/en/stable/index.html
+
+Python Binance API Wrapper: https://python-binance.readthedocs.io/en/latest/index.html
