@@ -136,3 +136,5 @@ dmypy.json
 
 # csv
 *.csv
+# ignore DS_Store files for secure file transfer on mac
+.DS_Store
