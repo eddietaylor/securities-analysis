@@ -20,4 +20,5 @@ dependencies:
      - praw
      - ipykernel
      - textblob
-     - python-binance  
+     - python-binance
+     - pandas_datareader 
