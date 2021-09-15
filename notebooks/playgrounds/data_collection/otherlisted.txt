@@ -869,7 +869,6 @@ CCAC.U|CITIC Capital Acquisition Corp. Units|N|CCAC.U|N|100|N|CCAC=
 CCAC.W|CITIC Capital Acquisition Corp. Warrants, each whole warrant exercisable for one Class A ordinary share at an exercise price of $11.50 per share|N|CCAC.WS|N|100|N|CCAC+
 CCCS|CCC Intelligent Solutions Holdings Inc. Common Stock|N|CCCS|N|100|N|CCCS
 CCCS.W|CCC Intelligent Solutions Holdings Inc. Warrants|N|CCCS.WS|N|100|N|CCCS+
-CCEP|Coca-Cola Europacific Partners plc Ordinary Shares|N|CCEP|N|100|N|CCEP
 CCF|Chase Corporation Common Stock|A|CCF|N|100|N|CCF
 CCI|Crown Castle International Corp. (REIT) Common Stock|N|CCI|N|100|N|CCI
 CCJ|Cameco Corporation Common Stock|N|CCJ|N|100|N|CCJ
@@ -1243,6 +1242,7 @@ CXH|MFS Investment Grade Municipal Trust Common Stock|N|CXH|N|100|N|CXH
 CXM|Sprinklr, Inc. Class A Common Stock|N|CXM|N|100|N|CXM
 CXP|Columbia Property Trust, Inc. Common Stock|N|CXP|N|100|N|CXP
 CXW|CoreCivic, Inc. Common Stock|N|CXW|N|100|N|CXW
+CYA|Simplify Tail Risk Strategy ETF|P|CYA|Y|100|N|CYA
 CYB|WisdomTree Chinese Yuan Strategy Fund|P|CYB|Y|100|N|CYB
 CYBN|Cybin Inc. Common Shares|A|CYBN|N|100|N|CYBN
 CYD|China Yuchai International Limited Common Stock|N|CYD|N|100|N|CYD
@@ -1335,11 +1335,13 @@ DFAI|Dimensional International Core Equity Market ETF|P|DFAI|Y|100|N|DFAI
 DFAS|Dimensional U.S. Small Cap ETF|P|DFAS|Y|100|N|DFAS
 DFAT|Dimensional U.S. Targeted Value ETF|P|DFAT|Y|100|N|DFAT
 DFAU|Dimensional US Core Equity Market ETF|P|DFAU|Y|100|N|DFAU
+DFAX|Dimensional World ex U.S. Core Equity 2 ETF|P|DFAX|Y|100|N|DFAX
 DFE|WisdomTree Europe SmallCap Dividend Fund|P|DFE|Y|100|N|DFE
 DFEB|FT Cboe Vest U.S. Equity Deep Buffer ETF - February|Z|DFEB|Y|100|N|DFEB
 DFEN|Direxion Daily Aerospace & Defense Bull 3X Shares|P|DFEN|Y|100|N|DFEN
 DFHY|TrimTabs Donoghue Forlines Tactical High Yield ETF|Z|DFHY|Y|100|N|DFHY
 DFIN|Donnelley Financial Solutions, Inc. Common Stock |N|DFIN|N|100|N|DFIN
+DFIV|Dimensional International Value ETF|P|DFIV|Y|100|N|DFIV
 DFJ|WisdomTree Japan SmallCap Fund|P|DFJ|Y|100|N|DFJ
 DFND|Siren DIVCON Dividend Defender ETF|Z|DFND|Y|100|N|DFND
 DFNL|Davis Fundamental ETF Trust Davis Select Financial ETF|Z|DFNL|Y|100|N|DFNL
@@ -2914,6 +2916,7 @@ IO|Ion Geophysical Corporation Common Stock|N|IO|N|100|N|IO
 IOO|iShares Global 100 ETF|P|IOO|Y|100|N|IOO
 IOR|Income Opportunity Realty Investors, Inc. Common Stock|A|IOR|N|100|N|IOR
 IP|International Paper Company Common Stock|N|IP|N|100|N|IP
+IP.V|International Paper Company Common Stock Ex-Distribution When Issued|N|IPw|N|100|N|IP#
 IPAC|iShares Core MSCI Pacific ETF|P|IPAC|Y|100|N|IPAC
 IPAY|ETFMG Prime Mobile Payments ETF|P|IPAY|Y|100|N|IPAY
 IPB|Merrill Lynch & Co., Inc. 6.0518% Index Plus Trust Certificates Series 2003-1|A|IPB|Y|100|N|IPB
@@ -3204,7 +3207,7 @@ KB|KB Financial Group Inc|N|KB|N|100|N|KB
 KBA|KraneShares Bosera MSCI China A ETF|P|KBA|Y|100|N|KBA
 KBE|SPDR S&P Bank ETF|P|KBE|Y|100|N|KBE
 KBH|KB Home Common Stock|N|KBH|N|100|N|KBH
-KBND|KraneShares Bloomberg Barclays China Bond Inclusion Index ETF|P|KBND|Y|100|N|KBND
+KBND|KraneShares Bloomberg China Bond Inclusion Index ETF|P|KBND|Y|100|N|KBND
 KBR|KBR, Inc. Common Stock|N|KBR|N|100|N|KBR
 KBUY|KraneShares CICC China Consumer Leaders Index ETF|P|KBUY|Y|100|N|KBUY
 KCAC|Kensington Capital Acquisition Corp. II Class A Common Stock|N|KCAC|N|100|N|KCAC
@@ -4072,7 +4075,7 @@ OPFI|OppFi Inc. Class A Common Stock|N|OPFI|N|100|N|OPFI
 OPFI.W|OppFi Inc. Warrants|N|OPFI.WS|N|100|N|OPFI+
 OPP|RiverNorth/DoubleLine Strategic Opportunity Fund, Inc. Common Stock|N|OPP|N|100|N|OPP
 OPP$A|RiverNorth/DoubleLine Strategic Opportunity Fund, Inc. 4.375% Series A Cumulative Preferred Stock|N|OPPpA|N|100|N|OPP-A
-OPP.V|RiverNorth/DoubleLine Strategic Opportunity Fund, Inc. Rights (expiring October 1, 2021)|N|OPPrw|N|100|N|OPP^#
+OPP.R|RiverNorth/DoubleLine Strategic Opportunity Fund, Inc. Rights (expiring October 1, 2021)|N|OPPr|N|100|N|OPP^
 OPPX|Corbett Road Tactical Opportunity ETF|P|OPPX|Y|100|N|OPPX
 OPTT|Ocean Power Technologies, Inc. Common Stock|A|OPTT|N|100|N|OPTT
 OPY|Oppenheimer Holdings, Inc. Class A Common Stock (DE)|N|OPY|N|100|N|OPY
@@ -4984,6 +4987,7 @@ SLI|Standard Lithium Ltd. Common Shares|A|SLI|N|100|N|SLI
 SLQT|SelectQuote, Inc. Common Stock|N|SLQT|N|100|N|SLQT
 SLT|Pacer Salt High truBeta US Market ETF|Z|SLT|Y|100|N|SLT
 SLV|iShares Silver Trust|P|SLV|Y|100|N|SLV
+SLVM.V|Sylvamo Corporation Common Stock When Issued|N|SLVMw|N|100|N|SLVM#
 SLVP|iShares MSCI Global Silver Miners Fund|Z|SLVP|Y|100|N|SLVP
 SLX|VanEck Steel ETF|P|SLX|Y|100|N|SLX
 SLY|SPDR S&P 600 Small Cap ETF (based on S&P SmallCap 600 Index -- symbol SML)|P|SLY|Y|100|N|SLY
@@ -5653,6 +5657,7 @@ USSG|Xtrackers MSCI USA ESG Leaders Equity ETF|P|USSG|Y|100|N|USSG
 UST|ProShares Ultra 7-10 Year Treasury|P|UST|Y|100|N|UST
 USTB|VictoryShares USAA Core Short-Term Bond ETF|P|USTB|Y|100|N|USTB
 USVM|VictoryShares USAA MSCI USA Small Cap Value Momentum ETF|P|USVM|Y|100|N|USVM
+USVT|US Value ETF|P|USVT|Y|100|N|USVT
 USX|U.S. Xpress Enterprises, Inc. Class A Common Stock|N|USX|N|100|N|USX
 UTES|Virtus Reaves Utilities ETF|P|UTES|Y|100|N|UTES
 UTF|Cohen & Steers Infrastructure Fund, Inc Common Stock|N|UTF|N|100|N|UTF
@@ -6128,4 +6133,4 @@ ZVIA|Zevia PBC Class A Common Stock|N|ZVIA|N|100|N|ZVIA
 ZVV|NYSE ARCA test stock|P|ZVV|N|100|Y|ZVV
 ZXIET|IEX Test Company Test Symbol Three for IEX|V|ZXIET|N|100|Y|ZXIET
 ZYME|Zymeworks Inc. Common Shares|N|ZYME|N|100|N|ZYME
-File Creation Time: 0910202121:31||||||
+File Creation Time: 0914202121:30||||||
