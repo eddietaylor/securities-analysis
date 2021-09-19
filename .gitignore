@@ -10,7 +10,7 @@ data/
 config.py
 
 #postgres creds
-setup_psql_environment.yaml
+psql_creds.yaml
 
 # C extensions
 *.so
