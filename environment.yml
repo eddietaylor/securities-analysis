@@ -22,3 +22,5 @@ dependencies:
      - textblob
      - python-binance
      - pandas_datareader 
+     - PyYAML
+     - SQLAlchemy
