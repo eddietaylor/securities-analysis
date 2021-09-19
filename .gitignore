@@ -9,6 +9,9 @@ data/
 # config file
 config.py
 
+#postgres creds
+setup_psql_environment.yaml
+
 # C extensions
 *.so
 
