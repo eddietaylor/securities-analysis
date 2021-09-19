@@ -1,0 +1,5 @@
+PGHOST: localhost
+PGDATABASE: securities_intel
+PGUSER: postgres
+PGPASSWORD: Washingt0n1776!
+PGPORT: 5432
