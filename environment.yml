@@ -24,3 +24,5 @@ dependencies:
      - pandas_datareader 
      - PyYAML
      - SQLAlchemy
+     - psycopg2
+     - models
