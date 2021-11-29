@@ -4,14 +4,14 @@ channels:
   - defaults
 dependencies:
   - jupyter
-  - pandas
-  - numpy
   - scikit-learn  
   - seaborn
-  - matplotlib
   - pytables  
   - pip
   - pip:
+     - matplotlib
+     - pandas
+     - numpy
      - plotly
      - yfinance
      - statsmodels
@@ -25,4 +25,4 @@ dependencies:
      - PyYAML
      - SQLAlchemy
      - psycopg2
-     - models
+    
