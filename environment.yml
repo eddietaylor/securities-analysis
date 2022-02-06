@@ -25,4 +25,5 @@ dependencies:
      - PyYAML
      - SQLAlchemy
      - psycopg2
-    
+     - PyPortfolioOpt  
+     - cvxopt 
