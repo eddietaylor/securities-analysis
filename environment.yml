@@ -26,4 +26,7 @@ dependencies:
      - SQLAlchemy
      - psycopg2
      - PyPortfolioOpt  
-     - cvxopt 
+     - cvxopt
+     - cmake
+     - tensorflow
+     - keras  
