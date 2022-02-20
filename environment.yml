@@ -29,4 +29,6 @@ dependencies:
      - cvxopt
      - cmake
      - tensorflow
-     - keras  
+     - keras
+     - xgboost
+     - catboost  
