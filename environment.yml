@@ -31,4 +31,6 @@ dependencies:
      - tensorflow
      - keras
      - xgboost
-     - catboost  
+     - catboost 
+     - backtrader
+     - pyzmq  
