@@ -8,6 +8,7 @@ dependencies:
   - seaborn
   - pytables  
   - pip
+  #- cvxopt
   - pip:
      - matplotlib
      - pandas
@@ -26,12 +27,14 @@ dependencies:
      - PyYAML
      - SQLAlchemy
      - psycopg2
-     - PyPortfolioOpt  
-     - cvxopt
+     #- PyPortfolioOpt
      - cmake
      - tensorflow
      - keras
      - xgboost
      - catboost 
      - backtrader
-     - pyzmq  
+     - pyzmq
+     - alpaca-trade-api
+     - git+https://github.com/yhilpisch/tpqoa.git
+     - selenium
