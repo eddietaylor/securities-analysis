@@ -6,6 +6,7 @@ apt-get upgrade -y  # updates packages
 # install system tools
 apt-get install -y gcc git htop  # system tools
 apt-get install -y screen htop vim wget  # system tools
+apt install python3-pip # need pip too
 apt-get upgrade -y bash  # upgrades bash if necessary
 apt-get clean  # cleans up the package index cache
 
@@ -27,8 +28,15 @@ pip install --upgrade pip
 # INSTALLING PYTHON LIBRARIES
 conda env create -f environment.yml
 
-# ACTIVATE VIRTUAL Environment
+# INITIALIZE SHELL
+conda init bash
+
+# ACTIVATE VIRTUAL ENVIRONMENT
 conda activate securities-analysis
+
+# INSTALLING PYTHON LIBRARIES
+conda install -y jupyter  # interactive data analytics in the browser
+conda install -y jupyterlab  # Jupyter Lab environment
 
 # COPYING FILES AND CREATING DIRECTORIES
 mkdir /root/.jupyter

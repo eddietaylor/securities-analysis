@@ -14,3 +14,7 @@ To generate a hash code for the jupyter lab password, run the following:
 
 Then copy this as a string into the jupyter_notebook_config.py file for the variable 
 definition of c.NotebookApp.password.
+
+# **Debugging SSH Connection to Digital Ocean Droplet**
+
+See: https://dev.to/gamebusterz/digitalocean-permission-denied-publickey-168p
