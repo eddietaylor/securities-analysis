@@ -12,6 +12,10 @@ config.py
 #postgres creds
 psql_creds.yaml
 
+#SSL Private and Public Keys, cert
+*.key
+*.pem
+
 # C extensions
 *.so
 
