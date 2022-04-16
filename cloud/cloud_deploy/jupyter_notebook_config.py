@@ -4,10 +4,10 @@ c.NotebookApp.certfile = u'/root/.jupyter/mycert.pem'
 c.NotebookApp.keyfile = u'/root/.jupyter/mykey.key'
 
 # IP ADDRESS AND PORT
-# set ip to '*' to bind on all IP addresses of the cloud instance
-c.NotebookApp.ip = '0.0.0.0'
+# set ip to '*' to allow access from any computer
+c.NotebookApp.ip = '*'
 # it is a good idea to set a known, fixed default port for server access
-c.NotebookApp.port = 8888
+c.NotebookApp.port = 9000
 
 # PASSWORD PROTECTION
 # here: 'jupyter' as password

@@ -6,9 +6,12 @@ apt-get upgrade -y  # updates packages
 # install system tools
 apt-get install -y gcc git htop  # system tools
 apt-get install -y screen htop vim wget  # system tools
-apt install python3-pip # need pip too
+apt install -y python3-pip # need pip too
 apt-get upgrade -y bash  # upgrades bash if necessary
 apt-get clean  # cleans up the package index cache
+
+# ALLOW TRAFFIC ON PORT
+sudo ufw allow 9000
 
 # INSTALLING MINICONDA
 wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh \
@@ -25,11 +28,14 @@ EOF
 # upgrading pip
 pip install --upgrade pip 
 
-# INSTALLING PYTHON LIBRARIES
-conda env create -f environment.yml
+# Source the Conda command
+source ~/miniconda3/etc/profile.d/conda.sh
 
-# INITIALIZE SHELL
-conda init bash
+# install mamba for parallel dependency solver
+conda install mamba -n base -c conda-forge
+
+# INSTALLING PYTHON LIBRARIES
+mamba env create -f environment.yml
 
 # ACTIVATE VIRTUAL ENVIRONMENT
 conda activate securities-analysis
