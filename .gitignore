@@ -4,7 +4,9 @@ __pycache__/
 *$py.class
 
 # Data folder
-data/
+data/*.yml
+data/*.cfg
+data/*.py
 
 # config file
 config.py

@@ -41,16 +41,17 @@ mamba env create -f environment.yml
 conda activate securities-analysis
 
 # INSTALLING PYTHON LIBRARIES
-conda install -y jupyter  # interactive data analytics in the browser
 conda install -y jupyterlab  # Jupyter Lab environment
 
 # COPYING FILES AND CREATING DIRECTORIES
 mkdir /root/.jupyter
+mkdir /root/data
 mv /root/jupyter_notebook_config.py /root/.jupyter/
 mv /root/mycert.pem /root/.jupyter
 mv /root/mykey.key /root/.jupyter
+mv /root/hash.cfg /root/data
 mkdir /root/notebook
 cd /root/notebook
 
 # STARTING JUPYTER LAB
-jupyter lab &
+jupyter lab --NotebookApp.password="$(python -c 'import configparser;config=configparser.ConfigParser();config.read("../data/hash.cfg");print(config["jupyterlabserver"]["hash_password"])')" &
