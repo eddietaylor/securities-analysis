@@ -29,8 +29,9 @@ Update the environment with a new package by adding it in the YAML file and whil
     conda env update -f environment.yml
 
 # **JupyterLab Cloud Server Setup**
-
-To run algorithmic trading bots we need infrastructure which is reliable, secure, 
+<details>
+  <summary>Expand for details</summary>
+To run algorithmic trading bots, we need infrastructure which is reliable and secure. Setting up your own physical server is not necessary since we can easily rent cloud infrastructure at low cost. 
 
 First, spin up a virtual machine at https://www.digitalocean.com/ (they call them droplets) with a minimum of 2 GB RAM. 
 
@@ -42,19 +43,19 @@ https://docs.digitalocean.com/products/droplets/how-to/add-ssh-keys/
 
 ## **SSL (HTTPS) Encryption**
 
-To create an encrypted communication between the JupyterLab server and the web browser, we set up an SSL public key and certificate. Run the following line from the terminal (Git Bash if on Windows):
+To create an encrypted communication between the JupyterLab server and the web browser, we set up an SSL public key and certificate. From within the cloud/cloud_deploy/ folder, run the following line from the terminal (Git Bash if on Windows):
 
     openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout mykey.key -out mycert.pem
 
-Follow instructions and enter your location, org, name, and email details. 
+Follow the instructions and enter your location, org, name, and email details. 
 
 For more info on SSL, see: https://www.cloudflare.com/learning/ssl/what-is-ssl/
 
 ## **Jupyter Lab Password Hashing**
 
-It is essential to have passwords be hashed. Hashing is a one-way function (impossible to decrypt). It is used for password validation. Still, you don't want even the hash exposed because hackers can brute force it and figure out the password (Then they would have root access to the cloud instance!!)
+It is essential to have passwords be hashed, in this case the password to the Jupyter Lab server. Hashing is a one-way function (impossible to decrypt). It is used for password validation. Still, you don't want even the hash exposed because hackers can brute force it and figure out the password (Then they would have root access to the cloud instance!!)
 
-To generate an Argon2 hash code for the Jupyter Lab password, run the following:
+To generate an Argon2 hash code for the Jupyter Lab password, run the following from within the cloud/cloud_deploy/ directory:
 
     python jupyter_hash_code.py [your password here]
 
@@ -66,7 +67,7 @@ Luckily, Argon2 hashing is quite secure and according to one source:
 
 ## **Browser Accessed Jupyter Lab Server Setup**
 
-Now we the copy SSL keys and jupyter notebook config files to the cloud instance, run the dependencies install script, and launch a jupyterlab server by simply running:
+Now to copy the SSL keys and jupyter notebook config files to the cloud instance, run the dependencies install script, and launch a jupyterlab server, we simply run (within the cloud/cloud_deploy/ directory):
 
     bash cloud_setup.sh [public ip address of cloud instance]
 
@@ -81,7 +82,7 @@ https://www.digitalocean.com/community/tutorials/how-to-set-up-a-jupyterlab-envi
 ## **Debugging SSH Connection to Digital Ocean Droplet**
 
 See: https://dev.to/gamebusterz/digitalocean-permission-denied-publickey-168p
-
+</details>
 
 # **Broker API Keys and Secrets**
 
