@@ -33,7 +33,7 @@ Update the environment with a new package by adding it in the YAML file and whil
   <summary>Expand for details</summary>
 To run algorithmic trading bots, we need infrastructure which is reliable and secure. Setting up your own physical server is not necessary since we can easily rent cloud infrastructure at low cost. 
 
-First, spin up a virtual machine at https://www.digitalocean.com/ (they call them droplets) with a minimum of 2 GB RAM. 
+First, spin up a virtual machine at https://www.digitalocean.com/ (they call them droplets) with a minimum of 2 GB RAM. For more info on creating a production-ready server, see: https://docs.digitalocean.com/tutorials/recommended-droplet-setup/
 
 ## **SSH Encryption**
 
@@ -82,6 +82,8 @@ https://www.digitalocean.com/community/tutorials/how-to-set-up-a-jupyterlab-envi
 ## **Debugging SSH Connection to Digital Ocean Droplet**
 
 See: https://dev.to/gamebusterz/digitalocean-permission-denied-publickey-168p
+
+SSH connection issues after rebuild: https://www.digitalocean.com/community/questions/how-can-i-get-rid-of-warning-remote-host-identification-has-changed
 </details>
 
 # **Broker API Keys and Secrets**
