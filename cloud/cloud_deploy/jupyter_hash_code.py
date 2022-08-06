@@ -12,6 +12,6 @@ def create_jupyter_hash_code(password):
     with open('../../data/hash.cfg', 'w') as configfile:
         config.write(configfile)
 
-    return print(hash_pass)
+    return print("hashed password generated and stored")
 
 create_jupyter_hash_code(sys.argv[1])

@@ -55,26 +55,27 @@ For more info on SSL, see: https://www.cloudflare.com/learning/ssl/what-is-ssl/
 
 It is essential to have passwords be hashed, in this case the password to the Jupyter Lab server. Hashing is a one-way function (impossible to decrypt). It is used for password validation. Still, you don't want even the hash exposed because hackers can brute force it and figure out the password (Then they would have root access to the cloud instance!!)
 
-To generate an Argon2 hash code for the Jupyter Lab password, run the following from within the cloud/cloud_deploy/ directory:
+To generate an Argon2 hash code for the Jupyter Lab password, run the following from within the cloud/cloud_deploy/ directory (make sure the virtual environment is activated):
 
     python jupyter_hash_code.py [your password here]
 
-This will get copied to the cloud and set as the password authentication for the browser
-login.
+This will next get copied to the cloud and set as the password authentication for the browser login.
 
 Luckily, Argon2 hashing is quite secure and according to one source:
 "Trying to crack a volume encrypted with Argon2 created on a modern laptop would require up to 75,121 powerful machines running for ten years and cost over 4 billion dollars."
 
 ## **Browser Accessed Jupyter Lab Server Setup**
 
-Now to copy the SSL keys and jupyter notebook config files to the cloud instance, run the dependencies install script, and launch a jupyterlab server, we simply run (within the cloud/cloud_deploy/ directory):
+In one command, we will copy the SSL keys and jupyter notebook config files to the cloud instance, run the dependencies install script, and launch a jupyterlab server. We simply run (within the cloud/cloud_deploy/ directory):
 
     bash cloud_setup.sh [public ip address of cloud instance]
 
 Then access the server through a browser at https://[public ip address of cloud instance]:9000/lab. The password will be the one which you hashed in the step above. 
 
 To shut down the Jupyter Lab server, from within Jupyter Lab, go to "file" then click "shutdown" (the Jupyter lab will run indefinitely at
-that port until you shut it down)
+that port until you shut it down).
+
+If you want to start with a clearn ubuntu install on the cloud instance, you can do a rebuild (see below for ssh reconnection).
 
 ## **Info On Setting Up JupyterLab Server**
 
