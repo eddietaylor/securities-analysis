@@ -1,0 +1,32 @@
+name: trade_env
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - jupyter
+  - scikit-learn  
+  - seaborn
+  - pytables  
+  - pip
+  - matplotlib
+  - pandas
+  - numpy
+  - plotly
+  - ipywidgets
+  - yfinance
+  - statsmodels
+  - quandl
+  - ipykernel
+  - textblob
+  - python-binance
+  - cmake
+  - keras
+  - xgboost
+  - catboost 
+  - pyzmq
+  - scipy
+  - pip:
+    - cpi
+    - pandas_datareader
+    - backtrader
+    - alpaca-py
