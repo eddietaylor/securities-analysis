@@ -23,8 +23,7 @@ from alpaca.trading.enums import AssetClass
 from alpaca.trading.enums import AssetStatus
 from alpaca.trading.enums import AssetExchange
 from typing import Any
-#from tradeAlpaca import tradeAlpaca
-
+import asyncio
 class tradeAlpaca(object):
     '''Python wrapper class for the Alpaca trading API via Alpaca-py SDK'''
 
@@ -55,6 +54,8 @@ class tradeAlpaca(object):
         self.stock_stream = StockDataStream(self.api_key, self.secret_key)
         # alpaca trading client
         self.trading_client = TradingClient(self.api_key,self.secret_key, paper=True)
+
+        self.quotes = pd.DataFrame()
 
     def get_current_price(self, ticker):
         '''
@@ -117,7 +118,14 @@ class tradeAlpaca(object):
             return bars_df
 
     async def quote_data_handler(self, data: Any):
-        print(data)
+        #print(type(data))
+        # the type is alpaca.data.models.quotes.Quote (look up in docs)
+        self.quotes = self.quotes.append({'timestamp':data.timestamp, 'symbol':data.symbol, 'ask_price':data.ask_price, 'bid_price':data.bid_price}, ignore_index=True)
+
+        # write the last row of self.qutoes to a csv file in append mode
+        self.quotes.tail(1).to_csv('data.csv', mode='a', header=False)
+        #print(f"yo the data is getting stored: {self.quotes}")
+
 
     def stream_data(self, ticker, asset_class=None):
         '''
@@ -138,8 +146,11 @@ class tradeAlpaca(object):
                 wss_client = CryptoDataStream(self.api_key, self.secret_key)
                 wss_client.subscribe_quotes(self.quote_data_handler, ticker)
                 wss_client.run()
-        except:
-            print("NEED TO SPECIFY ASSET CLASS")
+                # run for a user specificed amount of time
+                # asyncio.sleep(3)
+                # wss_client.close()
+        except Exception as e:
+            print(e)
     
     def get_account_details(self):
         '''
