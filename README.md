@@ -16,17 +16,27 @@ In addition, the optimizer used in the notebooks, PyPortfolioOpt, requires C++. 
 
 Once you have installed Anaconda, run:
 
-    conda env create -f environment.yml
+    conda env create -f trade_env.yml
 
 to install all the dependencies into an isolated environment.
 
+Then register the environment with Jupyter:
+
+    python -m ipykernel install --user --name=trade_env
+
 Activate the environment by running:
 
-    conda activate securities-analysis
+    conda activate trade_env
 
-Update the environment with a new package by adding it in the YAML file and while in the same directory as environment.yml, activate the environment, and run:
+Directly install new packages into the environment using pip. Then update the yaml with:
+
+    conda env export --name trade_env --file updated_trade_env.yml
+
+OR you can Update the environment with a new package by adding it in the YAML file and while in the same directory as environment.yml, activate the environment, and run:
 
     conda env update -f environment.yml
+
+This option is not recommended because you have to reinstall everything. 
 
 # **JupyterLab Cloud Server Setup**
 <details>
