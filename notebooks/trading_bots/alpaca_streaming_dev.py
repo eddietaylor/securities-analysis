@@ -1,20 +1,13 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[1]:
-
-
 from tradeAlpaca import tradeAlpaca
-
-
-# In[2]:
 
 
 trade_inst = tradeAlpaca(keys_file="../../data/alpaca_keys.cfg")
 
 
-# In[ ]:
+print(trade_inst.get_current_price("BTC/USD", stock=False))
 
 
-trade_inst.stream_data(ticker='BTC/USD', asset_class='crypto')
+#print(trade_inst.get_historical_prices("GLD", "2022-06-01", "2022-06-04", freq='day'))
+
+trade_inst.stream_data(ticker='BTC/USD', asset_class='crypto', interval_seconds=10)
 

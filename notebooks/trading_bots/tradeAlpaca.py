@@ -1,9 +1,10 @@
 import pandas as pd
 import configparser
-from datetime import datetime
+from datetime import datetime, timedelta
 import time
 from alpaca.data import CryptoHistoricalDataClient, StockHistoricalDataClient
-from alpaca.data import CryptoDataStream, StockDataStream
+from alpaca.data.live.crypto import CryptoDataStream
+from alpaca.data.live.stock import StockDataStream
 from alpaca.data.requests import StockLatestQuoteRequest, CryptoLatestQuoteRequest
 from alpaca.data.requests import StockBarsRequest, CryptoBarsRequest
 from alpaca.data.timeframe import TimeFrame
@@ -24,6 +25,8 @@ from alpaca.trading.enums import AssetStatus
 from alpaca.trading.enums import AssetExchange
 from typing import Any
 import asyncio
+from collections import deque
+
 class tradeAlpaca(object):
     '''Python wrapper class for the Alpaca trading API via Alpaca-py SDK'''
 
@@ -33,7 +36,7 @@ class tradeAlpaca(object):
         ----------
         keys_file: configuration .cfg file path
         with the following text contained within
-        that file:
+        that file (with no quotes!!!):
 
         [alpaca]
         api_key = laskdflasdkf
@@ -57,7 +60,9 @@ class tradeAlpaca(object):
 
         self.quotes = pd.DataFrame()
 
-    def get_current_price(self, ticker):
+        self.buffer = deque()
+
+    def get_current_price(self, ticker, stock=True):
         '''
         Description
         -----------
@@ -67,14 +72,14 @@ class tradeAlpaca(object):
         ----------
         ticker (str): ticker symbol of stock or crypto
         '''
-        try:
+        if stock:
             request_params = StockLatestQuoteRequest(symbol_or_symbols=[ticker])
             latest_quote = self.stock_client.get_stock_latest_quote(request_params)
             ask = latest_quote[ticker].ask_price
             bid = latest_quote[ticker].bid_price
             time = latest_quote[ticker].timestamp
             return time, float(bid), float(ask)
-        except:
+        else:
             request_params = CryptoLatestQuoteRequest(symbol_or_symbols=[ticker])
             latest_quote = self.crypto_client.get_crypto_latest_quote(request_params)
             ask = latest_quote[ticker].ask_price
@@ -117,40 +122,112 @@ class tradeAlpaca(object):
             bars_df = bars.df
             return bars_df
 
-    async def quote_data_handler(self, data: Any):
-        #print(type(data))
-        # the type is alpaca.data.models.quotes.Quote (look up in docs)
-        self.quotes = self.quotes.append({'timestamp':data.timestamp, 'symbol':data.symbol, 'ask_price':data.ask_price, 'bid_price':data.bid_price}, ignore_index=True)
-
-        # write the last row of self.qutoes to a csv file in append mode
-        self.quotes.tail(1).to_csv('data.csv', mode='a', header=False)
-        #print(f"yo the data is getting stored: {self.quotes}")
-
-
-    def stream_data(self, ticker, asset_class=None):
+    def stream_data(self, ticker, asset_class=None, interval_seconds=60):
         '''
         Description
         -----------
-        stream the data (NEEDS MORE WORK. WORKS FROM .py FILE)
+        Stream the data and aggregate it at user-specified intervals
 
         Parameters
         ----------
-        asset_class (str): Which asset class this ticker belongs to (e.g. 'equity','crypto')
+        ticker (str): The symbol of the asset to stream data for
+        asset_class (str): The asset class (e.g., 'equity', 'crypto')
+        interval_seconds (int): The interval (in seconds) for aggregation
         '''
         try:
             if asset_class == 'equity':
                 wss_client = StockDataStream(self.api_key, self.secret_key)
-                wss_client.subscribe_quotes(self.quote_data_handler, ticker)
-                wss_client.run()
+                async def quote_data_handler(data: Any):
+                    await self.handle_data(data, interval_seconds)
+                wss_client.subscribe_quotes(quote_data_handler, ticker)
+                asyncio.run(wss_client.run())
             elif asset_class == 'crypto':
                 wss_client = CryptoDataStream(self.api_key, self.secret_key)
-                wss_client.subscribe_quotes(self.quote_data_handler, ticker)
-                wss_client.run()
-                # run for a user specificed amount of time
-                # asyncio.sleep(3)
-                # wss_client.close()
+                async def quote_data_handler(data: Any):
+                    await self.handle_data(data, interval_seconds)
+                wss_client.subscribe_quotes(quote_data_handler, ticker)
+                asyncio.run(wss_client.run())
         except Exception as e:
             print(e)
+
+    async def handle_data(self, data, interval_seconds):
+        """
+        Handle incoming tick data and aggregate it by the specified interval.
+        """
+        # Get the timestamp from the tick data itself
+        current_time = data.timestamp if hasattr(data, 'timestamp') else datetime.now()
+
+        # Add the incoming data to the buffer (assuming bid/ask prices are part of `data`)
+        self.buffer.append((current_time, data))
+
+        # Determine the end of the aggregation interval (using current time)
+        if not hasattr(self, 'interval_end'):
+            self.interval_end = current_time + timedelta(seconds=interval_seconds)
+
+        # When the current time exceeds the interval end, aggregate the data
+        if current_time >= self.interval_end:
+            # Aggregate the data (example using Open, High, Low, Close)
+            self.aggregate_buffer()
+
+            # Reset the interval and buffer
+            self.interval_end = current_time + timedelta(seconds=interval_seconds)
+            self.buffer.clear()
+
+    def aggregate_buffer(self):
+        """
+        Aggregates data in the buffer into OHLC (open, high, low, close).
+        """
+        if not self.buffer:
+            return
+
+        # Extract the price information from the buffered data (assuming bid_price is available in `data`)
+        prices = [float(item[1].bid_price) for item in self.buffer if item[1].bid_price is not None]
+        timestamps = [item[0] for item in self.buffer if item[1].bid_price is not None]  # Timestamp from buffer
+
+
+        if prices:
+            open_price = prices[0]
+            high_price = max(prices)
+            low_price = min(prices)
+            close_price = prices[-1]
+
+            open_time = timestamps[0]  # Time of the first price in the interval
+            close_time = timestamps[-1]  # Time of the last price in the interval
+
+            # Example of how to output the aggregated data
+            print(f"OHLC for interval: Open={open_price} at {open_time}, High={high_price}, Low={low_price}, Close={close_price} at {close_time}")
+        else:
+            print("No valid prices to aggregate.")
+    
+
+    # def stream_data(self, ticker, asset_class=None):
+    #     '''
+    #     Description
+    #     -----------
+    #     stream the data (NEEDS MORE WORK. WORKS FROM .py FILE)
+
+    #     Parameters
+    #     ----------
+    #     asset_class (str): Which asset class this ticker belongs to (e.g. 'equity','crypto')
+    #     '''
+    #     try:
+    #         if asset_class == 'equity':
+    #             wss_client = StockDataStream(self.api_key, self.secret_key)
+    #             async def quote_data_handler(data: Any):
+    #                 print(data)
+    #             wss_client.subscribe_quotes(quote_data_handler, ticker)
+    #             wss_client.run()
+    #         elif asset_class == 'crypto':
+    #             wss_client = CryptoDataStream(self.api_key, self.secret_key)
+    #             async def quote_data_handler(data: Any):
+    #                 print(data)
+    #             wss_client.subscribe_quotes(quote_data_handler, ticker)
+    #             wss_client.run()
+    #             # run for a user specificed amount of time
+    #             # asyncio.sleep(3)
+    #             # wss_client.close()
+    #     except Exception as e:
+    #         print(e)
     
     def get_account_details(self):
         '''

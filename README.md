@@ -8,7 +8,7 @@ This library will possibly include a backtester as well as the ability to connec
 
 It is recommended to have some basic understanding of investment theory, to avoid unnecessary risks, and to hopefully manage those risks. If you have no financial background, please see the [investment notes](/notebooks/notes/investments_notes.ipynb), which are largely based on Zvi Bodie's market leading textbook, *Investments*.
 
-## Installing the dependencies
+## Installing the dependencies (CURRENTLY UNDER MAINTENANCE)
 
 To install the dependencies to run these notebooks, you should first install [Anaconda](https://www.anaconda.com/products/individual#Downloads). 
 
