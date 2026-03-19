@@ -2,22 +2,26 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 
 from securities_analysis.backtest.engine import StrategyBacktester
 from securities_analysis.agents.contracts import Bar, MarketEvent
+from securities_analysis.experiments import new_run_id, write_run_manifest
 from securities_analysis.execution.alpaca import AlpacaTrader
 from securities_analysis.risk.policy import RiskDecision, RiskPolicy
-from securities_analysis.strategies.trend_following import TimeSeriesMomentumStrategy
+from securities_analysis.runtime import TradingRuntimeSpec
+from securities_analysis.strategies.base import StrategyProtocol
 
 
 @dataclass(slots=True)
 class MvpExecutionService:
     trader: AlpacaTrader
-    strategy: TimeSeriesMomentumStrategy
+    strategy: StrategyProtocol
     risk_policy: RiskPolicy
     symbol: str
     asset_class: str
     interval_seconds: int
+    runtime_spec: TradingRuntimeSpec | None = None
     dry_run: bool = True
     latest_quote: MarketEvent | None = None
     session_start_equity: float | None = None
@@ -27,6 +31,8 @@ class MvpExecutionService:
     warmup_start: str | None = None
     warmup_end: str | None = None
     warmup_freq: str = "minute"
+    run_id: str | None = None
+    artifact_dir: Path | None = None
 
     def run(self) -> None:
         self._initialize_session()
@@ -50,6 +56,9 @@ class MvpExecutionService:
             f"buying_power={account.buying_power} "
             f"dry_run={self.dry_run}"
         )
+        if self.runtime_spec is not None:
+            print(f"RUNTIME SPEC | {self.runtime_spec.describe()}")
+        self._initialize_run_manifest(account)
 
     def _warmup_from_history(self) -> None:
         if not self.warmup_start or not self.warmup_end:
@@ -73,6 +82,34 @@ class MvpExecutionService:
             f"bars={warmed} "
             f"start={self.warmup_start} "
             f"end={self.warmup_end}"
+        )
+
+    def _initialize_run_manifest(self, account) -> None:
+        self.run_id = new_run_id("paper_run")
+        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        safe_symbol = self.symbol.replace("/", "_").replace("\\", "_")
+        self.artifact_dir = Path("artifacts") / "paper_runs" / f"{safe_symbol}_{stamp}"
+        config = {
+            "symbol": self.symbol,
+            "asset_class": self.asset_class,
+            "interval_seconds": self.interval_seconds,
+            "dry_run": self.dry_run,
+            "warmup_start": self.warmup_start,
+            "warmup_end": self.warmup_end,
+            "warmup_freq": self.warmup_freq,
+            "runtime_spec": self.runtime_spec.to_dict() if self.runtime_spec is not None else None,
+        }
+        summary = {
+            "account_equity": float(account.equity),
+            "buying_power": float(account.buying_power),
+            "status": str(account.status),
+        }
+        write_run_manifest(
+            self.artifact_dir,
+            kind="paper_run",
+            run_id=self.run_id,
+            config=config,
+            summary=summary,
         )
 
     def _handle_quote(self, quote: MarketEvent) -> None:

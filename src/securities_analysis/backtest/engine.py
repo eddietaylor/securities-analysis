@@ -9,7 +9,7 @@ from securities_analysis.backtest.costs import ExecutionCostModel
 from securities_analysis.risk.metrics import RiskReport
 from securities_analysis.risk.metrics import build_risk_report
 from securities_analysis.risk.policy import RiskPolicy
-from securities_analysis.strategies.trend_following import TimeSeriesMomentumStrategy
+from securities_analysis.strategies.base import StrategyProtocol
 
 
 @dataclass(slots=True)
@@ -42,7 +42,7 @@ class BacktestResult:
 
 @dataclass(slots=True)
 class StrategyBacktester:
-    strategy: TimeSeriesMomentumStrategy
+    strategy: StrategyProtocol
     risk_policy: RiskPolicy
     initial_equity: float = 100_000.0
     spread_bps: float = 0.0

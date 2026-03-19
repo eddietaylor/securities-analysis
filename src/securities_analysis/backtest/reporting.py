@@ -3,13 +3,18 @@ from __future__ import annotations
 import json
 from dataclasses import asdict
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 
 from securities_analysis.backtest.engine import BacktestResult
 
 
-def save_backtest_artifacts(result: BacktestResult, output_dir: str | Path) -> Path:
+def save_backtest_artifacts(
+    result: BacktestResult,
+    output_dir: str | Path,
+    metadata: dict[str, Any] | None = None,
+) -> Path:
     artifact_dir = Path(output_dir)
     artifact_dir.mkdir(parents=True, exist_ok=True)
 
@@ -26,6 +31,8 @@ def save_backtest_artifacts(result: BacktestResult, output_dir: str | Path) -> P
         "cumulative_return": result.cumulative_return,
         "risk_report": asdict(result.risk_report),
     }
+    if metadata:
+        summary_payload["metadata"] = metadata
     summary_path.write_text(json.dumps(summary_payload, indent=2), encoding="utf-8")
 
     steps_frame = pd.DataFrame(
