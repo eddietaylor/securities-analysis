@@ -9,6 +9,8 @@ from typing import Any
 
 import pandas as pd
 
+from securities_analysis.forecast_validation import add_realized_horizon_returns, compute_forecast_diagnostics
+
 
 def build_backtest_dashboard(
     artifact_dir: str | Path,
@@ -35,6 +37,32 @@ def build_backtest_dashboard(
     return output
 
 
+def build_forecast_dashboard(
+    artifact_dir: str | Path,
+    *,
+    output_path: str | Path | None = None,
+) -> Path:
+    artifact_path = Path(artifact_dir)
+    summary = json.loads((artifact_path / "summary.json").read_text(encoding="utf-8"))
+    steps_frame = pd.read_csv(artifact_path / "steps.csv")
+    if steps_frame.empty:
+        raise ValueError(f"No backtest steps found in {artifact_path}")
+
+    diagnostics_frame, diagnostics_summary = compute_forecast_diagnostics(steps_frame)
+    output = Path(output_path) if output_path else artifact_path / "forecast_dashboard.html"
+    chart_paths = _generate_forecast_charts(artifact_path, steps_frame, diagnostics_frame)
+    html = _render_forecast_dashboard_html(
+        artifact_path=artifact_path,
+        summary=summary,
+        steps_frame=steps_frame,
+        diagnostics_frame=diagnostics_frame,
+        diagnostics_summary=diagnostics_summary,
+        chart_paths=chart_paths,
+    )
+    output.write_text(html, encoding="utf-8")
+    return output
+
+
 def build_registry_dashboard_index(
     *,
     registry_path: str | Path = Path("artifacts") / "registry" / "run_registry.jsonl",
@@ -52,15 +80,23 @@ def build_registry_dashboard_index(
     for entry in registry:
         artifact_dir = Path(entry["artifact_dir"])
         dashboard_path = artifact_dir / "dashboard.html"
+        forecast_dashboard_path = artifact_dir / "forecast_dashboard.html"
         if entry.get("kind") == "backtest" and artifact_dir.exists():
             try:
                 build_backtest_dashboard(artifact_dir)
+            except Exception:
+                pass
+            try:
+                build_forecast_dashboard(artifact_dir)
             except Exception:
                 pass
 
         relative_dashboard = ""
         if dashboard_path.exists():
             relative_dashboard = str(Path("..") / artifact_dir.relative_to("artifacts") / "dashboard.html").replace("\\", "/")
+        relative_forecast_dashboard = ""
+        if forecast_dashboard_path.exists():
+            relative_forecast_dashboard = str(Path("..") / artifact_dir.relative_to("artifacts") / "forecast_dashboard.html").replace("\\", "/")
 
         config = entry.get("config", {})
         runtime_spec = config.get("runtime_spec", {})
@@ -85,6 +121,7 @@ def build_registry_dashboard_index(
                 "sharpe_ratio": summary.get("sharpe_ratio", ""),
                 "max_drawdown": summary.get("max_drawdown", ""),
                 "dashboard_href": relative_dashboard,
+                "forecast_dashboard_href": relative_forecast_dashboard,
             }
         )
 
@@ -252,6 +289,7 @@ def _render_backtest_dashboard_html(
     risk_table = _dict_to_table_rows(risk_spec)
     cost_table = _dict_to_table_rows(costs)
     risk_metrics_table = _dict_to_table_rows(risk_report)
+    forecast_dashboard_exists = (artifact_path / "forecast_dashboard.html").exists()
 
     chart_html = "".join(
         f"<section class='panel'><h2>{escape(title)}</h2><img src='dashboard_assets/{escape(path)}' alt='{escape(title)} chart'></section>"
@@ -295,6 +333,13 @@ def _render_backtest_dashboard_html(
     <div class="meta">Run ID: <span class="mono">{escape(metadata.get("run_id", ""))}</span></div>
   </header>
   <main>
+    <section class="panel">
+      <h2>Related Views</h2>
+      <p>
+        {"<a href='forecast_dashboard.html'>Open Forecast Diagnostics Dashboard</a>" if forecast_dashboard_exists else "Forecast diagnostics dashboard not generated yet."}
+      </p>
+    </section>
+
     <section class="grid">
       {"".join(f"<div class='card'><h3>{escape(label)}</h3><div class='value'>{escape(value)}</div></div>" for label, value in cards)}
     </section>
@@ -339,12 +384,206 @@ def _render_backtest_dashboard_html(
 """
 
 
+def _generate_forecast_charts(
+    artifact_path: Path,
+    steps_frame: pd.DataFrame,
+    diagnostics_frame: pd.DataFrame,
+) -> dict[str, str]:
+    chart_dir = artifact_path / "dashboard_assets"
+    chart_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+    except ModuleNotFoundError:
+        return {}
+
+    generated: dict[str, str] = {}
+    working = steps_frame.copy()
+    working["timestamp"] = pd.to_datetime(working["timestamp"])
+
+    if "aggregate_score" in working.columns or "signal_confidence" in working.columns:
+        figure, axes = plt.subplots(2, 1, figsize=(12, 7), sharex=True)
+        if "aggregate_score" in working.columns:
+            axes[0].plot(working["timestamp"], working["aggregate_score"], color="#0b84a5")
+            axes[0].axhline(0.0, color="black", linewidth=1, linestyle="--", alpha=0.5)
+            axes[0].set_title("Aggregate Forecast Score")
+            axes[0].set_ylabel("Score")
+            axes[0].grid(True, alpha=0.25)
+        if "signal_confidence" in working.columns:
+            axes[1].plot(working["timestamp"], working["signal_confidence"], color="#4c956c")
+            axes[1].set_title("Signal Confidence")
+            axes[1].set_ylabel("Confidence")
+            axes[1].set_xlabel("Time")
+            axes[1].grid(True, alpha=0.25)
+        path = chart_dir / "forecast_signal_confidence.png"
+        figure.tight_layout()
+        figure.savefig(path, dpi=150, bbox_inches="tight")
+        plt.close(figure)
+        generated["signal_confidence"] = path.name
+
+    if not diagnostics_frame.empty:
+        figure, axes = plt.subplots(1, 2, figsize=(12, 4))
+        axes[0].bar(diagnostics_frame["horizon_bars"].astype(str), diagnostics_frame["correlation"], color="#0b84a5")
+        axes[0].set_title("Forecast vs Realized Correlation")
+        axes[0].set_xlabel("Horizon")
+        axes[0].set_ylabel("Correlation")
+        axes[0].grid(True, axis="y", alpha=0.25)
+
+        axes[1].bar(
+            diagnostics_frame["horizon_bars"].astype(str),
+            diagnostics_frame["directional_accuracy"],
+            color="#ff7f11",
+        )
+        axes[1].set_title("Directional Accuracy by Horizon")
+        axes[1].set_xlabel("Horizon")
+        axes[1].set_ylabel("Accuracy")
+        axes[1].set_ylim(0, 1)
+        axes[1].grid(True, axis="y", alpha=0.25)
+
+        path = chart_dir / "forecast_metrics_by_horizon.png"
+        figure.tight_layout()
+        figure.savefig(path, dpi=150, bbox_inches="tight")
+        plt.close(figure)
+        generated["metrics_by_horizon"] = path.name
+
+        first_row = diagnostics_frame.sort_values("horizon_bars").iloc[0]
+        forecast_column = str(first_row["forecast_column"])
+        realized_column = f"realized_return_h{int(first_row['horizon_bars'])}"
+        frame = add_realized_horizon_returns(steps_frame.copy())
+        frame["timestamp"] = pd.to_datetime(frame["timestamp"])
+        frame = frame[[forecast_column, realized_column]].dropna()
+        if not frame.empty:
+            figure, axes = plt.subplots(1, 2, figsize=(12, 4))
+            axes[0].scatter(frame[forecast_column], frame[realized_column], alpha=0.6, color="#6c5ce7")
+            axes[0].axhline(0.0, color="black", linewidth=1, linestyle="--", alpha=0.5)
+            axes[0].axvline(0.0, color="black", linewidth=1, linestyle="--", alpha=0.5)
+            axes[0].set_title(f"Forecast vs Realized (h={int(first_row['horizon_bars'])})")
+            axes[0].set_xlabel("Forecast")
+            axes[0].set_ylabel("Realized")
+            axes[0].grid(True, alpha=0.25)
+
+            axes[1].plot(frame.index, frame[forecast_column], label="Forecast", color="#0b84a5")
+            axes[1].plot(frame.index, frame[realized_column], label="Realized", color="#d1495b")
+            axes[1].set_title(f"Forecast and Realized Sequence (h={int(first_row['horizon_bars'])})")
+            axes[1].legend()
+            axes[1].grid(True, alpha=0.25)
+
+            path = chart_dir / "forecast_vs_realized.png"
+            figure.tight_layout()
+            figure.savefig(path, dpi=150, bbox_inches="tight")
+            plt.close(figure)
+            generated["forecast_vs_realized"] = path.name
+
+    return generated
+
+
+def _render_forecast_dashboard_html(
+    *,
+    artifact_path: Path,
+    summary: dict[str, Any],
+    steps_frame: pd.DataFrame,
+    diagnostics_frame: pd.DataFrame,
+    diagnostics_summary: dict[str, Any],
+    chart_paths: dict[str, str],
+) -> str:
+    metadata = summary.get("metadata", {})
+    runtime_spec = metadata.get("runtime_spec", {})
+    strategy_spec = runtime_spec.get("strategy", {})
+    forecastability = diagnostics_summary.get("forecastability", {})
+    aggregate_signal = diagnostics_summary.get("aggregate_signal", {})
+
+    cards = [
+        ("Model", str(strategy_spec.get("family", ""))),
+        ("Bars Evaluated", str(len(steps_frame))),
+        ("Horizon Metrics", str(len(diagnostics_frame))),
+        ("Primary Signal", str(steps_frame["signal_name"].iloc[0]) if "signal_name" in steps_frame.columns and not steps_frame.empty else ""),
+    ]
+
+    forecast_table = _dict_to_table_rows(forecastability)
+    aggregate_table = _dict_to_table_rows(aggregate_signal)
+    diagnostics_table = _frame_to_html(diagnostics_frame, max_rows=10)
+
+    chart_html = "".join(
+        f"<section class='panel'><h2>{escape(title)}</h2><img src='dashboard_assets/{escape(path)}' alt='{escape(title)} chart'></section>"
+        for title, path in [
+            ("Forecast Score and Confidence", chart_paths.get("signal_confidence", "")),
+            ("Horizon Metrics", chart_paths.get("metrics_by_horizon", "")),
+            ("Forecast vs Realized", chart_paths.get("forecast_vs_realized", "")),
+        ]
+        if path
+    )
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Forecast Diagnostics | {escape(summary.get("symbol", ""))}</title>
+  <style>
+    body {{ font-family: "Segoe UI", sans-serif; margin: 0; background: #f6f8fb; color: #18212b; }}
+    header {{ padding: 24px 32px; background: linear-gradient(135deg, #18212b, #6c5ce7); color: white; }}
+    main {{ padding: 24px 32px 40px; max-width: 1400px; margin: 0 auto; }}
+    .meta {{ opacity: 0.92; margin-top: 6px; }}
+    .grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin: 20px 0 28px; }}
+    .card {{ background: white; border-radius: 14px; padding: 16px 18px; box-shadow: 0 8px 28px rgba(14, 28, 45, 0.08); }}
+    .card h3 {{ margin: 0 0 8px; font-size: 0.95rem; color: #536273; }}
+    .card .value {{ font-size: 1.3rem; font-weight: 700; }}
+    .two-col {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; margin-bottom: 24px; }}
+    .panel {{ background: white; border-radius: 14px; padding: 18px; box-shadow: 0 8px 28px rgba(14, 28, 45, 0.08); margin-bottom: 24px; }}
+    .panel h2 {{ margin-top: 0; }}
+    table {{ border-collapse: collapse; width: 100%; font-size: 0.92rem; }}
+    th, td {{ padding: 8px 10px; border-bottom: 1px solid #e6ebf2; text-align: left; vertical-align: top; }}
+    th {{ color: #536273; font-weight: 600; }}
+    img {{ max-width: 100%; border-radius: 10px; }}
+    .mono {{ font-family: Consolas, monospace; }}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Forecast Diagnostics: {escape(summary.get("symbol", ""))}</h1>
+    <div class="meta mono">{escape(str(artifact_path))}</div>
+    <div class="meta"><a href="dashboard.html" style="color: white;">Open Trading / Backtest Dashboard</a></div>
+  </header>
+  <main>
+    <section class="grid">
+      {"".join(f"<div class='card'><h3>{escape(label)}</h3><div class='value'>{escape(value)}</div></div>" for label, value in cards)}
+    </section>
+
+    <section class="two-col">
+      <div class="panel">
+        <h2>Forecastability Diagnostics</h2>
+        <table>{forecast_table}</table>
+      </div>
+      <div class="panel">
+        <h2>Aggregate Signal Diagnostics</h2>
+        <table>{aggregate_table}</table>
+      </div>
+    </section>
+
+    {chart_html}
+
+    <section class="panel">
+      <h2>Horizon Validation Metrics</h2>
+      {diagnostics_table}
+    </section>
+  </main>
+</body>
+</html>
+"""
+
+
 def _render_index_html(frame: pd.DataFrame) -> str:
     rows = []
     for _, row in frame.iterrows():
         dashboard_cell = (
             f"<a href='{escape(str(row['dashboard_href']))}'>open</a>"
             if row["dashboard_href"]
+            else ""
+        )
+        forecast_dashboard_cell = (
+            f"<a href='{escape(str(row['forecast_dashboard_href']))}'>open</a>"
+            if row["forecast_dashboard_href"]
             else ""
         )
         rows.append(
@@ -359,6 +598,7 @@ def _render_index_html(frame: pd.DataFrame) -> str:
             f"<td>{_fmt_float(row['sharpe_ratio'])}</td>"
             f"<td>{_fmt_pct(row['max_drawdown'])}</td>"
             f"<td>{dashboard_cell}</td>"
+            f"<td>{forecast_dashboard_cell}</td>"
             "</tr>"
         )
 
@@ -397,7 +637,8 @@ def _render_index_html(frame: pd.DataFrame) -> str:
             <th>Cumulative Return</th>
             <th>Sharpe</th>
             <th>Max Drawdown</th>
-            <th>Dashboard</th>
+            <th>Trading</th>
+            <th>Forecast</th>
           </tr>
         </thead>
         <tbody>

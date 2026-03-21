@@ -10,7 +10,11 @@ from securities_analysis.backtest.reporting import save_backtest_artifacts
 from securities_analysis.backtest.research import ResearchPeriod, save_research_artifacts
 from securities_analysis.backtest.research import run_research_grid, run_research_periods
 from securities_analysis.config import load_alpaca_settings
-from securities_analysis.dashboard import build_backtest_dashboard, build_registry_dashboard_index
+from securities_analysis.dashboard import (
+    build_backtest_dashboard,
+    build_forecast_dashboard,
+    build_registry_dashboard_index,
+)
 from securities_analysis.experiments import new_run_id, write_run_manifest
 from securities_analysis.execution.alpaca import AlpacaTrader
 from securities_analysis.runtime import risk_spec_from_args, runtime_spec_from_args
@@ -599,7 +603,9 @@ def main() -> None:
                 args.artifact_dir,
                 output_path=args.output_path,
             )
+            forecast_output_path = build_forecast_dashboard(args.artifact_dir)
             print(f"DASHBOARD GENERATED | path={output_path}")
+            print(f"FORECAST DASHBOARD GENERATED | path={forecast_output_path}")
             return
 
         kinds = {"backtest"} if args.backtests_only else None
