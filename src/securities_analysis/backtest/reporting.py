@@ -8,6 +8,7 @@ from typing import Any
 import pandas as pd
 
 from securities_analysis.backtest.engine import BacktestResult
+from securities_analysis.dashboard import build_backtest_dashboard
 
 
 def save_backtest_artifacts(
@@ -60,6 +61,7 @@ def save_backtest_artifacts(
 
     if not steps_frame.empty:
         _save_equity_drawdown_chart(steps_frame, chart_path, result.symbol)
+        build_backtest_dashboard(artifact_dir)
 
     return artifact_dir
 
@@ -70,6 +72,8 @@ def _save_equity_drawdown_chart(
     symbol: str,
 ) -> None:
     try:
+        import matplotlib
+        matplotlib.use("Agg")
         import matplotlib.pyplot as plt
     except ModuleNotFoundError:
         return
