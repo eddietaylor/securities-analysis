@@ -6,7 +6,7 @@ from datetime import datetime
 
 import numpy as np
 
-from securities_analysis.agents.contracts import Bar, SignalDecision
+from securities_analysis.agents.contracts import ForecastSnapshot, HorizonForecast, Bar, SignalDecision
 
 
 @dataclass(slots=True)
@@ -25,6 +25,7 @@ class TimeSeriesMomentumStrategy:
     asset_returns: deque[float] = field(default_factory=deque)
     strategy_returns: deque[float] = field(default_factory=deque)
     current_target_position: float = 0.0
+    latest_forecast: ForecastSnapshot | None = None
 
     def on_bar(self, bar: Bar) -> SignalDecision | None:
         self._append_bar(bar)
@@ -62,6 +63,29 @@ class TimeSeriesMomentumStrategy:
             f"realized_vol={realized_vol:.4f}, "
             f"target_position={target_position:.4f}"
         )
+        self.latest_forecast = ForecastSnapshot(
+            symbol=self.symbol,
+            forecast_time=bar.end_time,
+            model_name="time_series_momentum",
+            aggregate_expected_return=momentum_score,
+            aggregate_score=normalized_momentum,
+            realized_volatility=realized_vol,
+            confidence=confidence,
+            regime_label="uptrend" if target_position > 0 else "flat_or_downtrend",
+            horizons=[
+                HorizonForecast(
+                    horizon_bars=self.lookback_bars,
+                    expected_return=momentum_score,
+                    signal_strength=normalized_momentum,
+                    weight=1.0,
+                    metadata={"direction": direction},
+                )
+            ],
+            metadata={
+                "target_position": target_position,
+                "close_price": bar.close_price,
+            },
+        )
         return SignalDecision(
             symbol=self.symbol,
             decision_time=bar.end_time,
@@ -82,6 +106,9 @@ class TimeSeriesMomentumStrategy:
 
     def get_asset_returns(self) -> np.ndarray:
         return np.array(self.asset_returns, dtype=float)
+
+    def get_latest_forecast(self) -> ForecastSnapshot | None:
+        return self.latest_forecast
 
     def _append_bar(self, bar: Bar) -> None:
         max_bars = max(self.min_bars, self.lookback_bars, self.vol_lookback_bars) + 5

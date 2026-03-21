@@ -66,6 +66,29 @@ class SignalDecision:
 
 
 @dataclass(slots=True)
+class HorizonForecast:
+    horizon_bars: int
+    expected_return: float
+    signal_strength: float
+    weight: float
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
+class ForecastSnapshot:
+    symbol: str
+    forecast_time: datetime
+    model_name: str
+    aggregate_expected_return: float
+    aggregate_score: float
+    realized_volatility: float | None = None
+    confidence: float | None = None
+    regime_label: str = ""
+    horizons: list[HorizonForecast] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
 class OrderIntent:
     symbol: str
     created_at: datetime

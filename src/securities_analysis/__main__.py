@@ -55,7 +55,7 @@ def build_parser() -> argparse.ArgumentParser:
     mvp_parser.add_argument(
         "--strategy-family",
         default="trend",
-        choices=["trend", "mean_reversion"],
+        choices=["trend", "mean_reversion", "multi_horizon_trend"],
         help="Strategy family to run in the live or dry-run loop",
     )
     mvp_parser.add_argument(
@@ -92,7 +92,7 @@ def build_parser() -> argparse.ArgumentParser:
     backtest_parser.add_argument(
         "--strategy-family",
         default="trend",
-        choices=["trend", "mean_reversion"],
+        choices=["trend", "mean_reversion", "multi_horizon_trend"],
         help="Strategy family to evaluate in the backtest",
     )
     backtest_parser.add_argument(
@@ -154,8 +154,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     research_parser.add_argument(
         "--strategy-families",
-        default="trend,mean_reversion",
-        help="Comma-separated strategy families to compare, e.g. trend,mean_reversion",
+        default="trend,mean_reversion,multi_horizon_trend",
+        help="Comma-separated strategy families to compare, e.g. trend,mean_reversion,multi_horizon_trend",
     )
     research_parser.add_argument(
         "--asset-class",
