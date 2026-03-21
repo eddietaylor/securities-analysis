@@ -179,3 +179,31 @@ First backtest checkpoint:
 - first result was roughly flat and clearly not a production-quality signal yet
 - that is acceptable at this stage because the immediate goal was to prove the forecasting-layer integration, not to declare victory on the first formulation
 - next focus should be improving the forecast design and feature set rather than loosening risk controls
+
+Validation note:
+
+- current forecast diagnostics use chronological rolling-origin / walk-forward evaluation
+- they do not use shuffled k-fold cross-validation
+- this is acceptable for the current online rule-based forecaster because each signal is generated using only past information
+- once we introduce fitted ML models, we should upgrade to explicit walk-forward retraining and consider purging / embargo when forecast horizons overlap
+## 2026-03-21 - Forecast Validation Became First-Class
+
+We now have a separate forecasting-validation layer in addition to the trading/backtest dashboard layer.
+
+What changed:
+- forecast diagnostics are explicitly recorded as chronological rolling-origin / walk-forward evaluation
+- the artifact now says this is not shuffled k-fold cross-validation
+- per-horizon forecast quality is saved with correlation, MAE, RMSE, bias, and directional accuracy
+- lightweight forecastability diagnostics are saved for the underlying asset return stream
+- a dedicated walkthrough notebook was added:
+  - `notebooks/trading_bots/forecast_validation_walkthrough.ipynb`
+
+Why this matters:
+- the current multi-horizon forecaster is not good yet, but now we can see why
+- the first SPY run showed weak/negative forecast correlations despite superficially acceptable directional accuracy
+- this strongly suggests that sign alone is not enough and the forecast magnitude/construction is wrong
+
+Current doctrine:
+- validate forecasting quality before touching the risk shell
+- keep using chronological walk-forward evaluation
+- when we add fitted ML forecasters later, extend this with explicit walk-forward retraining and potentially purging/embargo for overlapping horizons

@@ -8,7 +8,8 @@ from typing import Any
 import pandas as pd
 
 from securities_analysis.backtest.engine import BacktestResult
-from securities_analysis.dashboard import build_backtest_dashboard
+from securities_analysis.dashboard import build_backtest_dashboard, build_forecast_dashboard
+from securities_analysis.forecast_validation import compute_forecast_diagnostics
 
 
 def save_backtest_artifacts(
@@ -22,6 +23,8 @@ def save_backtest_artifacts(
     summary_path = artifact_dir / "summary.json"
     steps_path = artifact_dir / "steps.csv"
     chart_path = artifact_dir / "equity_drawdown.png"
+    forecast_metrics_path = artifact_dir / "forecast_horizon_metrics.csv"
+    forecast_summary_path = artifact_dir / "forecast_diagnostics_summary.json"
 
     summary_payload = {
         "symbol": result.symbol,
@@ -38,32 +41,47 @@ def save_backtest_artifacts(
 
     steps_frame = pd.DataFrame(
         [
-            {
-                "timestamp": step.bar.end_time.isoformat(),
-                "symbol": step.bar.symbol,
-                "close_price": step.bar.close_price,
-                "approved": step.approved,
-                "reason": step.reason,
-                "target_position": step.target_position,
-                "desired_quantity": step.desired_quantity,
-                "equity": step.equity,
-                "session_return": step.session_return,
-                "spread_bps": step.spread_bps,
-                "turnover_fraction": step.turnover_fraction,
-                "gross_return": step.gross_return,
-                "cost_return": step.cost_return,
-                "net_return": step.net_return,
-            }
+            _step_to_record(step)
             for step in result.steps
         ]
     )
     steps_frame.to_csv(steps_path, index=False)
 
     if not steps_frame.empty:
+        forecast_metrics_frame, forecast_summary = compute_forecast_diagnostics(steps_frame)
+        forecast_metrics_frame.to_csv(forecast_metrics_path, index=False)
+        forecast_summary_path.write_text(json.dumps(forecast_summary, indent=2), encoding="utf-8")
         _save_equity_drawdown_chart(steps_frame, chart_path, result.symbol)
         build_backtest_dashboard(artifact_dir)
+        build_forecast_dashboard(artifact_dir)
 
     return artifact_dir
+
+
+def _step_to_record(step) -> dict[str, Any]:
+    payload = {
+        "timestamp": step.bar.end_time.isoformat(),
+        "symbol": step.bar.symbol,
+        "close_price": step.bar.close_price,
+        "signal_name": step.signal_name,
+        "signal_confidence": step.signal_confidence,
+        "signal_rationale": step.signal_rationale,
+        "approved": step.approved,
+        "reason": step.reason,
+        "target_position": step.target_position,
+        "desired_quantity": step.desired_quantity,
+        "equity": step.equity,
+        "session_return": step.session_return,
+        "spread_bps": step.spread_bps,
+        "turnover_fraction": step.turnover_fraction,
+        "gross_return": step.gross_return,
+        "cost_return": step.cost_return,
+        "net_return": step.net_return,
+    }
+    for key, value in step.signal_metadata.items():
+        if isinstance(value, (int, float, str, bool)) or value is None:
+            payload[key] = value
+    return payload
 
 
 def _save_equity_drawdown_chart(

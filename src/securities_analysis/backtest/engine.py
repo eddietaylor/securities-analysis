@@ -15,12 +15,16 @@ from securities_analysis.strategies.base import StrategyProtocol
 @dataclass(slots=True)
 class BacktestStep:
     bar: Bar
+    signal_name: str
+    signal_confidence: float | None
+    signal_rationale: str
     approved: bool
     reason: str
     target_position: float
     desired_quantity: float
     equity: float
     session_return: float
+    signal_metadata: dict[str, object] = field(default_factory=dict)
     spread_bps: float = 0.0
     turnover_fraction: float = 0.0
     gross_return: float = 0.0
@@ -102,12 +106,16 @@ class StrategyBacktester:
             steps.append(
                 BacktestStep(
                     bar=bar,
+                    signal_name=signal.signal_name,
+                    signal_confidence=signal.confidence,
+                    signal_rationale=signal.rationale,
                     approved=decision.approved,
                     reason=decision.reason,
                     target_position=signal.target_position,
                     desired_quantity=current_quantity,
                     equity=equity,
                     session_return=session_return,
+                    signal_metadata=dict(signal.metadata),
                     spread_bps=self.spread_bps,
                     turnover_fraction=turnover_fraction,
                     gross_return=gross_return,
