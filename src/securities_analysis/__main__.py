@@ -10,6 +10,7 @@ from securities_analysis.backtest.reporting import save_backtest_artifacts
 from securities_analysis.backtest.research import ResearchPeriod, save_research_artifacts
 from securities_analysis.backtest.research import run_research_grid, run_research_periods
 from securities_analysis.config import load_alpaca_settings
+from securities_analysis.dashboard import build_backtest_dashboard, build_registry_dashboard_index
 from securities_analysis.experiments import new_run_id, write_run_manifest
 from securities_analysis.execution.alpaca import AlpacaTrader
 from securities_analysis.runtime import risk_spec_from_args, runtime_spec_from_args
@@ -295,6 +296,29 @@ def build_parser() -> argparse.ArgumentParser:
     for parser_obj in (mvp_parser, backtest_parser, research_parser):
         _add_shared_strategy_and_risk_args(parser_obj)
 
+    dashboard_parser = subparsers.add_parser(
+        "dashboard",
+        help="Generate static HTML dashboards for backtests and the run explorer index",
+    )
+    dashboard_parser.add_argument(
+        "--artifact-dir",
+        help="Optional specific backtest artifact directory to render",
+    )
+    dashboard_parser.add_argument(
+        "--output-path",
+        help="Optional output path for a specific dashboard or the explorer index",
+    )
+    dashboard_parser.add_argument(
+        "--registry-path",
+        default=str(Path("artifacts") / "registry" / "run_registry.jsonl"),
+        help="Path to the run registry JSONL file",
+    )
+    dashboard_parser.add_argument(
+        "--backtests-only",
+        action="store_true",
+        help="Restrict the explorer index to backtest runs",
+    )
+
     return parser
 
 
@@ -302,15 +326,16 @@ def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
 
-    settings = load_alpaca_settings(cfg_path=args.cfg)
-    trader = AlpacaTrader(settings)
-
     if args.command == "account":
+        settings = load_alpaca_settings(cfg_path=args.cfg)
+        trader = AlpacaTrader(settings)
         account = trader.get_account_details()
         print(account)
         return
 
     if args.command == "stream":
+        settings = load_alpaca_settings(cfg_path=args.cfg)
+        trader = AlpacaTrader(settings)
         service = PaperTradingService(
             trader=trader,
             symbol=args.symbol,
@@ -322,6 +347,8 @@ def main() -> None:
         return
 
     if args.command == "mvp":
+        settings = load_alpaca_settings(cfg_path=args.cfg)
+        trader = AlpacaTrader(settings)
         periods_per_year = max(int((252 * 6.5 * 60) / max(args.interval_seconds, 1)), 1)
         runtime_spec = runtime_spec_from_args(args, periods_per_year)
         strategy = runtime_spec.strategy.build(symbol=args.symbol, periods_per_year=periods_per_year)
@@ -343,6 +370,8 @@ def main() -> None:
         return
 
     if args.command == "backtest":
+        settings = load_alpaca_settings(cfg_path=args.cfg)
+        trader = AlpacaTrader(settings)
         periods_per_year = _periods_per_year_for_freq(args.freq)
         strategy_spec = strategy_spec_from_args(args)
         risk_spec = risk_spec_from_args(args, periods_per_year)
@@ -434,6 +463,8 @@ def main() -> None:
         return
 
     if args.command == "research":
+        settings = load_alpaca_settings(cfg_path=args.cfg)
+        trader = AlpacaTrader(settings)
         symbols = [symbol.strip() for symbol in args.symbols.split(",") if symbol.strip()]
         if args.periods:
             periods = _parse_periods_arg(args.periods)
@@ -560,6 +591,24 @@ def main() -> None:
                 f"{args.rank_by}={metric_text}"
             )
         print(f"ARTIFACTS SAVED | path={artifact_dir}")
+        return
+
+    if args.command == "dashboard":
+        if args.artifact_dir:
+            output_path = build_backtest_dashboard(
+                args.artifact_dir,
+                output_path=args.output_path,
+            )
+            print(f"DASHBOARD GENERATED | path={output_path}")
+            return
+
+        kinds = {"backtest"} if args.backtests_only else None
+        output_path = build_registry_dashboard_index(
+            registry_path=args.registry_path,
+            output_path=args.output_path or Path("artifacts") / "dashboard" / "index.html",
+            kinds=kinds,
+        )
+        print(f"RUN EXPLORER GENERATED | path={output_path}")
         return
 
 

@@ -96,3 +96,37 @@ Do not rely on chat memory alone for project state. This file is the durable sou
 - where the system stands
 - what was learned
 - what needs to happen next
+
+### Validation Notebook Note
+
+Do not try to build explanation notebooks for every layer all at once.
+
+Instead, add a small set of glass-box validation notebooks at the points where system complexity is starting to outrun intuition.
+
+Immediate priority:
+
+- a single-path walkthrough notebook that shows:
+  - bars
+  - runtime spec
+  - signal decision
+  - risk decision
+  - order intent
+  - final backtest step
+
+Follow-on notebooks can cover:
+
+- backtest accounting and cost attribution
+- research harness assembly and leaderboard construction
+
+### Dashboard Note
+
+Backtest inspection should follow a two-layer pattern:
+
+- run explorer:
+  - browse tracked runs from the experiment registry
+  - filter and compare at a high level
+- run detail dashboard:
+  - inspect one run deeply
+  - review equity, drawdown, turnover, cost drag, trade activity, and rejection events
+
+Do not try to collapse every strategy, instrument, and parameter combination into one giant page.
