@@ -5,7 +5,7 @@ from typing import Protocol
 
 import numpy as np
 
-from securities_analysis.agents.contracts import Bar, SignalDecision
+from securities_analysis.agents.contracts import Bar, ForecastSnapshot, SignalDecision
 
 
 class StrategyProtocol(Protocol):
@@ -16,4 +16,7 @@ class StrategyProtocol(Protocol):
         ...
 
     def get_strategy_returns(self) -> np.ndarray:
+        ...
+
+    def get_latest_forecast(self) -> ForecastSnapshot | None:
         ...

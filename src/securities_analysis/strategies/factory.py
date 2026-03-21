@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from securities_analysis.strategies.base import StrategyProtocol
 from securities_analysis.strategies.mean_reversion import MeanReversionStrategy
+from securities_analysis.strategies.multi_horizon_trend import MultiHorizonTrendStrategy
 from securities_analysis.strategies.trend_following import TimeSeriesMomentumStrategy
 
 
@@ -41,5 +42,16 @@ def build_strategy(
             long_only=not allow_short,
             entry_zscore=mean_reversion_entry_zscore,
             exit_zscore=mean_reversion_exit_zscore,
+        )
+    if strategy_family == "multi_horizon_trend":
+        return MultiHorizonTrendStrategy(
+            symbol=symbol,
+            lookback_bars=lookback_bars,
+            vol_lookback_bars=vol_lookback_bars,
+            target_volatility=target_volatility,
+            max_gross_leverage=max_gross_leverage,
+            periods_per_year=periods_per_year,
+            min_bars=min_bars,
+            long_only=not allow_short,
         )
     raise ValueError(f"Unsupported strategy family: {strategy_family}")

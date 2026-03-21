@@ -147,3 +147,9 @@ dmypy.json
 *.csv
 # ignore DS_Store files for secure file transfer on mac
 .DS_Store
+
+# generated research and backtest artifacts
+artifacts/
+
+# local reference payloads
+docs/references/*.pdf

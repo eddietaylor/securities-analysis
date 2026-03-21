@@ -130,3 +130,52 @@ Backtest inspection should follow a two-layer pattern:
   - review equity, drawdown, turnover, cost drag, trade activity, and rejection events
 
 Do not try to collapse every strategy, instrument, and parameter combination into one giant page.
+
+### Forecasting Roadmap Note
+
+We now have enough platform infrastructure to shift the main bottleneck from plumbing to model quality.
+
+Next forecasting tracks to research:
+
+- richer trend model with multiple horizons
+- regime-aware trend model
+- volatility forecasting model
+- breakout / compression-expansion model
+
+Priority order:
+
+1. multi-horizon forecaster
+2. regime-aware extensions to trend
+3. breakout / compression-expansion sleeve
+4. volatility forecasting as a sizing and gating enhancement
+
+Current stance:
+
+- keep the risk shell conservative for now
+- seek alpha from better forecasting, not from simply increasing risk
+- favor structured and interpretable forecasting upgrades before jumping to large deep models
+
+Primary forecasting reference:
+
+- `docs/references/Mastering_Modern_Time_Series_Forecasting___A_Comprehensive_Guide_to_Statistical__Machine_Learning__and_Deep_Learning_Models_in_Python_18_February_2026.pdf`
+- companion notes: `docs/references/reading_notes.md`
+
+### Multi-Horizon Forecasting Checkpoint
+
+The first forecasting-layer upgrade beyond the original simple trend rule is now underway.
+
+Current implementation direction:
+
+- add a `multi_horizon_trend` strategy family
+- expose explicit forecast snapshots and horizon-level components
+- keep the existing simple trend and mean-reversion sleeves as baselines
+
+The immediate objective is not to maximize return by taking more risk.
+The immediate objective is to improve forecast quality while preserving the conservative risk shell.
+
+First backtest checkpoint:
+
+- `multi_horizon_trend` ran successfully through the standard backtest path on `SPY 2024`
+- first result was roughly flat and clearly not a production-quality signal yet
+- that is acceptable at this stage because the immediate goal was to prove the forecasting-layer integration, not to declare victory on the first formulation
+- next focus should be improving the forecast design and feature set rather than loosening risk controls
