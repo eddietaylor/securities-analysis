@@ -186,3 +186,273 @@ What we want:
 
 - good symbols and parameter neighborhoods remain competitive across periods
 - benchmark-relative performance does not disappear outside one calendar year
+
+## Panel-Training Universe
+
+If we move from local single-symbol forecasting toward panel-style ML, we need an explicit first universe.
+
+### First Recommended Universe
+
+Use a curated liquid ETF panel first:
+
+- broad equity:
+  - `SPY`
+  - `QQQ`
+  - `IWM`
+  - `DIA`
+- rates:
+  - `TLT`
+  - `IEF`
+- metals:
+  - `GLD`
+  - `SLV`
+- sectors:
+  - `XLK`
+  - `XLF`
+  - `XLE`
+  - `XLU`
+
+Optional second-wave additions:
+
+- `EEM`
+- `FXI`
+
+Why this universe:
+
+- strong liquidity
+- clean histories
+- broad regime diversity
+- tradable in the current stack
+- enough cross-sectional variety to support panel-style forecasting
+
+### Universe Filters
+
+Before admitting a symbol to the panel universe, check:
+
+- history length
+- average dollar volume
+- spread quality
+- broker tradability
+- absence of obvious structural pathologies
+
+### Universe Metadata
+
+Store at least:
+
+- `symbol`
+- `asset_class`
+- `sub_class`
+- `sector_or_theme`
+- `liquidity_bucket`
+- `volatility_bucket`
+
+This metadata should later be usable as model inputs or conditioning variables.
+
+### Research Use
+
+Use this universe for:
+
+- multi-symbol forecastability comparison
+- panel-style model training
+- local-vs-global forecasting comparisons
+
+Do not immediately expand to a huge stock universe until:
+
+- the panel dataset builder exists
+- the validation protocol is stable
+- the local baselines and global baseline can be compared honestly
+
+## Panel Dataset Builder
+
+The repo now has a first panel-dataset CLI path for global / panel-style forecasting research.
+
+Example:
+
+```powershell
+$env:PYTHONPATH="src"
+python -m securities_analysis `
+  --cfg data\alpaca_keys.cfg `
+  panel-dataset `
+  --symbols SPY,QQQ,IWM,DIA,TLT,IEF,GLD,SLV,XLK,XLF,XLE,XLU `
+  --asset-class equity `
+  --start 2018-01-01 `
+  --end 2024-12-31 `
+  --freq day `
+  --lookback-bars 60 `
+  --vol-lookback-bars 20 `
+  --horizons 5,10,20,60
+```
+
+Output artifacts:
+
+- `panel_dataset.csv`
+- `summary.json`
+
+Current dataset contents:
+
+- `timestamp`
+- `symbol`
+- universe metadata columns
+- engineered feature columns prefixed with `feature_`
+- multi-horizon targets:
+  - `target_log_return_h*`
+  - `target_direction_h*`
+
+This is the scaffold for:
+
+- global boosted models
+- local-vs-global model comparisons
+- future multivariate / panel forecasting experiments
+
+## Momentum-Fit Universes
+
+For the current momentum / trend sleeve, do not default mentally to `SPY` as the main proving ground.
+
+Use these as first-class momentum presets instead:
+
+### `momentum_macro`
+
+- `GLD`
+- `SLV`
+- `TLT`
+- `IEF`
+- `SPY`
+- `QQQ`
+- `IWM`
+- `DIA`
+
+Interpretation:
+
+- macro / rates / metals are the primary candidates
+- equity ETFs remain useful as controls and comparison instruments
+
+### `momentum_crypto`
+
+- `BTC/USD`
+- `ETH/USD`
+- `SOL/USD`
+- `AVAX/USD`
+
+Interpretation:
+
+- crypto is a legitimate momentum candidate
+- but it comes with extra venue, funding, and market-structure risk
+- use it as a dedicated momentum research bucket, not as an afterthought
+
+### Example Commands
+
+Macro preset:
+
+```powershell
+$env:PYTHONPATH="src"
+python -m securities_analysis `
+  --cfg data\alpaca_keys.cfg `
+  panel-dataset `
+  --universe-preset momentum_macro `
+  --start 2018-01-01 `
+  --end 2024-12-31 `
+  --freq day `
+  --lookback-bars 60 `
+  --vol-lookback-bars 20 `
+  --horizons 5,10,20,60
+```
+
+Crypto preset:
+
+```powershell
+$env:PYTHONPATH="src"
+python -m securities_analysis `
+  --cfg data\alpaca_keys.cfg `
+  panel-dataset `
+  --universe-preset momentum_crypto `
+  --start 2021-01-01 `
+  --end 2024-12-31 `
+  --freq day `
+  --lookback-bars 60 `
+  --vol-lookback-bars 20 `
+  --horizons 5,10,20,60
+```
+
+## Futures Direction
+
+The momentum sleeve should now be thought of as a futures-first research program.
+
+Why:
+
+- the strongest evidence base for time-series momentum / trend is in futures
+- especially rates, equity index, and commodity futures
+- current ETF proxies are useful bridge instruments, but not the ideal final research universe
+
+### Near-Term Bridge Instruments
+
+Use these ETF proxies when we need accessible macro exposures inside the current stack:
+
+- `TLT`
+- `IEF`
+- `GLD`
+- `SLV`
+
+Interpretation:
+
+- these are macro / futures-like stand-ins
+- not the final target venue
+
+### First Futures We Should Support
+
+As the data layer evolves, prioritize:
+
+- US Treasury futures
+- S&P 500 futures
+- Nasdaq futures
+- gold futures
+- crude oil futures
+
+### First Futures Research Preset
+
+The repo now supports an initial `momentum_futures` research preset using Yahoo continuous futures symbols:
+
+- `ES=F` : S&P 500 futures proxy
+- `NQ=F` : Nasdaq futures proxy
+- `ZN=F` : 10-year Treasury futures proxy
+- `ZB=F` : 30-year Treasury futures proxy
+- `GC=F` : gold futures proxy
+- `CL=F` : crude oil futures proxy
+
+Use this for research with:
+
+```powershell
+$env:PYTHONPATH="src"
+python -m securities_analysis `
+  panel-dataset `
+  --universe-preset momentum_futures `
+  --history-provider yfinance `
+  --start 2004-01-01 `
+  --end 2024-12-31 `
+  --freq day `
+  --lookback-bars 60 `
+  --vol-lookback-bars 20 `
+  --horizons 5,10,20,60
+```
+
+Important caveat:
+
+- this is a research bridge using Yahoo's futures symbols
+- it is not yet a fully specified continuous-contract engine with explicit roll methodology
+- treat it as the first futures-native step, not the final institutional-grade implementation
+
+### Futures Research Requirements
+
+Before futures-native momentum research is trustworthy, we need:
+
+- deeper historical data than the current Alpaca ETF path
+- continuous-contract construction
+- explicit roll methodology
+- contract metadata and expiry handling
+
+### Working Rule
+
+When discussing momentum research:
+
+- do not default back to `SPY`
+- default to macro / futures-like exposures first
+- treat equity ETFs mainly as controls unless evidence clearly says otherwise

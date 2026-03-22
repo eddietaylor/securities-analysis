@@ -17,6 +17,29 @@ from securities_analysis.dashboard import (
 )
 from securities_analysis.experiments import new_run_id, write_run_manifest
 from securities_analysis.execution.alpaca import AlpacaTrader
+from securities_analysis.execution.history import build_history_provider
+from securities_analysis.forecastability_scan import (
+    default_forecastability_output_dir,
+    save_forecastability_scan,
+    scan_forecastability,
+)
+from securities_analysis.panel import (
+    build_panel_dataset,
+    default_panel_metadata,
+    default_panel_output_dir,
+    default_panel_symbols,
+    preset_metadata,
+    preset_names,
+    preset_symbols,
+    save_panel_dataset,
+)
+from securities_analysis.panel_forecast import (
+    PanelForecastConfig,
+    default_panel_forecast_output_dir,
+    evaluate_global_panel_forecast,
+    load_panel_dataset,
+    save_panel_forecast_artifacts,
+)
 from securities_analysis.runtime import risk_spec_from_args, runtime_spec_from_args
 from securities_analysis.runtime import strategy_spec_from_args
 from securities_analysis.services.mvp_execution import MvpExecutionService
@@ -59,7 +82,7 @@ def build_parser() -> argparse.ArgumentParser:
     mvp_parser.add_argument(
         "--strategy-family",
         default="trend",
-        choices=["trend", "mean_reversion", "multi_horizon_trend"],
+        choices=["trend", "mean_reversion", "multi_horizon_trend", "feature_linear_forecast", "feature_boosted_forecast", "regime_timing_linear_forecast"],
         help="Strategy family to run in the live or dry-run loop",
     )
     mvp_parser.add_argument(
@@ -96,7 +119,7 @@ def build_parser() -> argparse.ArgumentParser:
     backtest_parser.add_argument(
         "--strategy-family",
         default="trend",
-        choices=["trend", "mean_reversion", "multi_horizon_trend"],
+        choices=["trend", "mean_reversion", "multi_horizon_trend", "feature_linear_forecast", "feature_boosted_forecast", "regime_timing_linear_forecast"],
         help="Strategy family to evaluate in the backtest",
     )
     backtest_parser.add_argument(
@@ -158,8 +181,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     research_parser.add_argument(
         "--strategy-families",
-        default="trend,mean_reversion,multi_horizon_trend",
-        help="Comma-separated strategy families to compare, e.g. trend,mean_reversion,multi_horizon_trend",
+        default="trend,mean_reversion,multi_horizon_trend,feature_linear_forecast,feature_boosted_forecast,regime_timing_linear_forecast",
+        help="Comma-separated strategy families to compare, e.g. trend,mean_reversion,multi_horizon_trend,feature_linear_forecast,feature_boosted_forecast,regime_timing_linear_forecast",
     )
     research_parser.add_argument(
         "--asset-class",
@@ -321,6 +344,220 @@ def build_parser() -> argparse.ArgumentParser:
         "--backtests-only",
         action="store_true",
         help="Restrict the explorer index to backtest runs",
+    )
+
+    panel_parser = subparsers.add_parser(
+        "panel-dataset",
+        help="Build a panel-style forecasting dataset across a curated symbol universe",
+    )
+    panel_parser.add_argument(
+        "--symbols",
+        default=",".join(default_panel_symbols()),
+        help="Comma-separated symbols for the panel dataset",
+    )
+    panel_parser.add_argument(
+        "--universe-preset",
+        choices=preset_names(),
+        help="Optional named universe preset. If provided, it overrides --symbols and implies the matching asset-class default.",
+    )
+    panel_parser.add_argument(
+        "--asset-class",
+        default="equity",
+        choices=["equity", "crypto", "future"],
+        help="Asset class for all symbols in the panel dataset",
+    )
+    panel_parser.add_argument("--start", required=True, help="Historical start date YYYY-MM-DD")
+    panel_parser.add_argument("--end", required=True, help="Historical end date YYYY-MM-DD")
+    panel_parser.add_argument(
+        "--freq",
+        default="day",
+        choices=["minute", "hour", "day", "week", "month"],
+        help="Historical bar frequency",
+    )
+    panel_parser.add_argument(
+        "--lookback-bars",
+        type=int,
+        default=60,
+        help="Primary lookback used in feature construction",
+    )
+    panel_parser.add_argument(
+        "--vol-lookback-bars",
+        type=int,
+        default=20,
+        help="Volatility lookback used in feature construction",
+    )
+    panel_parser.add_argument(
+        "--horizons",
+        default="5,10,20,60",
+        help="Comma-separated forecast horizons in bars",
+    )
+    panel_parser.add_argument(
+        "--output-dir",
+        help="Optional output directory for saved panel dataset artifacts",
+    )
+    panel_parser.add_argument(
+        "--history-provider",
+        default="alpaca",
+        choices=["alpaca", "yfinance"],
+        help="Historical market data provider for the panel dataset. Use yfinance for deeper equity/ETF history.",
+    )
+
+    panel_forecast_parser = subparsers.add_parser(
+        "panel-forecast",
+        help="Train and evaluate a first global panel forecasting baseline from a saved panel dataset",
+    )
+    panel_forecast_parser.add_argument(
+        "--dataset-dir",
+        required=True,
+        help="Path to a panel dataset artifact directory containing panel_dataset.csv",
+    )
+    panel_forecast_parser.add_argument(
+        "--horizons",
+        default="5,10,20,60",
+        help="Comma-separated horizons to model from the panel dataset",
+    )
+    panel_forecast_parser.add_argument(
+        "--model-family",
+        default="gradient_boosting",
+        choices=["gradient_boosting", "linear_ridge", "catboost"],
+        help="Panel forecasting model family to use for the shared multivariate forecast.",
+    )
+    panel_forecast_parser.add_argument(
+        "--min-train-dates",
+        type=int,
+        default=80,
+        help="Minimum number of unique dates before evaluation begins",
+    )
+    panel_forecast_parser.add_argument(
+        "--max-train-dates",
+        type=int,
+        default=0,
+        help="Maximum trailing unique dates to retain for training. Use 0 for expanding history.",
+    )
+    panel_forecast_parser.add_argument(
+        "--retrain-every-dates",
+        type=int,
+        default=5,
+        help="Refit cadence in unique dates",
+    )
+    panel_forecast_parser.add_argument(
+        "--n-estimators",
+        type=int,
+        default=60,
+        help="Number of boosting stages",
+    )
+    panel_forecast_parser.add_argument(
+        "--learning-rate",
+        type=float,
+        default=0.05,
+        help="Boosting learning rate",
+    )
+    panel_forecast_parser.add_argument(
+        "--max-depth",
+        type=int,
+        default=2,
+        help="Tree depth for the global boosted model",
+    )
+    panel_forecast_parser.add_argument(
+        "--ridge-alpha",
+        type=float,
+        default=1.0,
+        help="Regularization strength for the linear ridge panel model.",
+    )
+    panel_forecast_parser.add_argument(
+        "--catboost-iterations",
+        type=int,
+        default=600,
+        help="Maximum boosting iterations for CatBoost.",
+    )
+    panel_forecast_parser.add_argument(
+        "--catboost-depth",
+        type=int,
+        default=6,
+        help="Tree depth for CatBoost.",
+    )
+    panel_forecast_parser.add_argument(
+        "--catboost-l2-leaf-reg",
+        type=float,
+        default=3.0,
+        help="L2 leaf regularization for CatBoost.",
+    )
+    panel_forecast_parser.add_argument(
+        "--catboost-random-strength",
+        type=float,
+        default=1.0,
+        help="Random strength for CatBoost score regularization.",
+    )
+    panel_forecast_parser.add_argument(
+        "--catboost-bagging-temperature",
+        type=float,
+        default=1.0,
+        help="Bagging temperature for CatBoost Bayesian bootstrap.",
+    )
+    panel_forecast_parser.add_argument(
+        "--catboost-early-stopping-rounds",
+        type=int,
+        default=50,
+        help="Early stopping rounds for CatBoost.",
+    )
+    panel_forecast_parser.add_argument(
+        "--catboost-validation-fraction",
+        type=float,
+        default=0.15,
+        help="Fraction of each training window reserved as the CatBoost validation slice.",
+    )
+    panel_forecast_parser.add_argument(
+        "--include-symbol-identity",
+        action="store_true",
+        help="Include target symbol identity as a categorical input. Off by default so the model leans on multivariate covariates first.",
+    )
+    panel_forecast_parser.add_argument(
+        "--exclude-bucket-metadata",
+        action="store_true",
+        help="Exclude asset/bucket metadata categorical inputs.",
+    )
+    panel_forecast_parser.add_argument(
+        "--output-dir",
+        help="Optional output directory for saved panel forecast artifacts",
+    )
+
+    forecastability_parser = subparsers.add_parser(
+        "forecastability-scan",
+        help="Rank a symbol universe on high-level forecastability diagnostics without fitting forecasting models",
+    )
+    forecastability_parser.add_argument(
+        "--symbols",
+        default=",".join(default_panel_symbols()),
+        help="Comma-separated symbols for the scan",
+    )
+    forecastability_parser.add_argument(
+        "--universe-preset",
+        choices=preset_names(),
+        help="Optional named universe preset. If provided, it overrides --symbols and implies the matching asset-class default.",
+    )
+    forecastability_parser.add_argument(
+        "--asset-class",
+        default="equity",
+        choices=["equity", "crypto", "future"],
+        help="Asset class for all symbols in the scan",
+    )
+    forecastability_parser.add_argument("--start", required=True, help="Historical start date YYYY-MM-DD")
+    forecastability_parser.add_argument("--end", required=True, help="Historical end date YYYY-MM-DD")
+    forecastability_parser.add_argument(
+        "--freq",
+        default="day",
+        choices=["minute", "hour", "day", "week", "month"],
+        help="Historical bar frequency",
+    )
+    forecastability_parser.add_argument(
+        "--history-provider",
+        default="yfinance",
+        choices=["alpaca", "yfinance"],
+        help="Historical market data provider for the scan.",
+    )
+    forecastability_parser.add_argument(
+        "--output-dir",
+        help="Optional output directory for saved scan artifacts",
     )
 
     return parser
@@ -617,6 +854,152 @@ def main() -> None:
         print(f"RUN EXPLORER GENERATED | path={output_path}")
         return
 
+    if args.command == "panel-dataset":
+        if args.universe_preset:
+            symbols = preset_symbols(args.universe_preset)
+            metadata_map = preset_metadata(args.universe_preset)
+            inferred_asset_class = next(iter(metadata_map.values())).asset_class if metadata_map else args.asset_class
+            asset_class = inferred_asset_class
+        else:
+            symbols = [symbol.strip() for symbol in args.symbols.split(",") if symbol.strip()]
+            metadata_map = default_panel_metadata()
+            asset_class = args.asset_class
+        if asset_class == "future" and args.history_provider != "yfinance":
+            parser.error("Futures panel datasets currently require --history-provider yfinance.")
+        trader = None
+        if args.history_provider == "alpaca":
+            settings = load_alpaca_settings(cfg_path=args.cfg)
+            trader = AlpacaTrader(settings)
+        history_provider = build_history_provider(
+            history_provider=args.history_provider,
+            trader=trader,
+        )
+        periods_per_year = _periods_per_year_for_freq(args.freq)
+        frame = build_panel_dataset(
+            history_provider=history_provider,
+            symbols=symbols,
+            asset_class=asset_class,
+            start=args.start,
+            end=args.end,
+            freq=args.freq,
+            lookback_bars=args.lookback_bars,
+            vol_lookback_bars=args.vol_lookback_bars,
+            horizons=_parse_int_grid(args.horizons),
+            periods_per_year=periods_per_year,
+            metadata_map=metadata_map,
+        )
+        artifact_dir = save_panel_dataset(
+            frame,
+            output_dir=args.output_dir or default_panel_output_dir(freq=args.freq),
+            config={
+                "symbols": symbols,
+                "asset_class": asset_class,
+                "universe_preset": args.universe_preset or "",
+                "start": args.start,
+                "end": args.end,
+                "freq": args.freq,
+                "history_provider": args.history_provider,
+                "lookback_bars": args.lookback_bars,
+                "vol_lookback_bars": args.vol_lookback_bars,
+                "horizons": _parse_int_grid(args.horizons),
+            },
+        )
+        print(
+            "PANEL DATASET BUILT | "
+            f"rows={len(frame)} "
+            f"symbols={frame['symbol'].nunique() if not frame.empty else 0} "
+            f"path={artifact_dir}"
+        )
+        return
+
+    if args.command == "panel-forecast":
+        panel_frame = load_panel_dataset(args.dataset_dir)
+        predictions_frame, overall_metrics, symbol_metrics, summary = evaluate_global_panel_forecast(
+            panel_frame,
+            config=PanelForecastConfig(
+                horizons=_parse_int_grid(args.horizons),
+                model_family=args.model_family,
+                min_train_dates=args.min_train_dates,
+                max_train_dates=(args.max_train_dates if args.max_train_dates and args.max_train_dates > 0 else None),
+                retrain_every_dates=args.retrain_every_dates,
+                n_estimators=args.n_estimators,
+                learning_rate=args.learning_rate,
+                max_depth=args.max_depth,
+                ridge_alpha=args.ridge_alpha,
+                catboost_iterations=args.catboost_iterations,
+                catboost_depth=args.catboost_depth,
+                catboost_l2_leaf_reg=args.catboost_l2_leaf_reg,
+                catboost_random_strength=args.catboost_random_strength,
+                catboost_bagging_temperature=args.catboost_bagging_temperature,
+                catboost_early_stopping_rounds=args.catboost_early_stopping_rounds,
+                catboost_validation_fraction=args.catboost_validation_fraction,
+                include_symbol_identity=args.include_symbol_identity,
+                include_bucket_metadata=not args.exclude_bucket_metadata,
+            ),
+        )
+        artifact_dir = save_panel_forecast_artifacts(
+            predictions_frame,
+            overall_metrics,
+            symbol_metrics,
+            summary,
+            output_dir=args.output_dir or default_panel_forecast_output_dir(),
+        )
+        print(
+            "PANEL FORECAST COMPLETE | "
+            f"rows={len(predictions_frame)} "
+            f"symbols={predictions_frame['symbol'].nunique() if not predictions_frame.empty else 0} "
+            f"path={artifact_dir}"
+        )
+        return
+
+    if args.command == "forecastability-scan":
+        if args.universe_preset:
+            symbols = preset_symbols(args.universe_preset)
+            metadata_map = preset_metadata(args.universe_preset)
+            inferred_asset_class = next(iter(metadata_map.values())).asset_class if metadata_map else args.asset_class
+            asset_class = inferred_asset_class
+        else:
+            symbols = [symbol.strip() for symbol in args.symbols.split(",") if symbol.strip()]
+            metadata_map = default_panel_metadata()
+            asset_class = args.asset_class
+        if asset_class == "future" and args.history_provider != "yfinance":
+            parser.error("Futures forecastability scans currently require --history-provider yfinance.")
+        trader = None
+        if args.history_provider == "alpaca":
+            settings = load_alpaca_settings(cfg_path=args.cfg)
+            trader = AlpacaTrader(settings)
+        history_provider = build_history_provider(
+            history_provider=args.history_provider,
+            trader=trader,
+        )
+        universe = [metadata_map[symbol] for symbol in symbols if symbol in metadata_map]
+        frame = scan_forecastability(
+            history_provider=history_provider,
+            universe=universe,
+            start=args.start,
+            end=args.end,
+            freq=args.freq,
+        )
+        artifact_dir = save_forecastability_scan(
+            frame,
+            output_dir=args.output_dir or default_forecastability_output_dir(),
+            config={
+                "symbols": symbols,
+                "asset_class": asset_class,
+                "universe_preset": args.universe_preset or "",
+                "start": args.start,
+                "end": args.end,
+                "freq": args.freq,
+                "history_provider": args.history_provider,
+            },
+        )
+        print(
+            "FORECASTABILITY SCAN COMPLETE | "
+            f"rows={len(frame)} "
+            f"path={artifact_dir}"
+        )
+        return
+
 
 def _build_strategy(args, periods_per_year: int) -> StrategyProtocol:
     return build_strategy(
@@ -721,6 +1104,12 @@ def _add_shared_strategy_and_risk_args(parser: argparse.ArgumentParser) -> None:
         type=float,
         default=0.25,
         help="Z-score threshold for exiting mean-reversion trades",
+    )
+    parser.add_argument(
+        "--max-train-samples",
+        type=int,
+        default=0,
+        help="Maximum number of training observations retained by trainable forecast models. Use 0 for expanding history.",
     )
 
 

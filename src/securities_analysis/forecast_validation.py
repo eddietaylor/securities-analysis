@@ -44,7 +44,7 @@ def compute_forecast_diagnostics(steps_frame: pd.DataFrame) -> tuple[pd.DataFram
 
     for horizon, forecast_column in horizon_map.items():
         realized_column = f"realized_return_h{horizon}"
-        sample = frame[[forecast_column, realized_column]].dropna()
+        sample = frame[[forecast_column, realized_column]].dropna().reset_index(drop=True)
         if sample.empty:
             continue
 
@@ -58,17 +58,45 @@ def compute_forecast_diagnostics(steps_frame: pd.DataFrame) -> tuple[pd.DataFram
         hit_rate_nonzero = float(
             np.mean(np.sign(forecast_values[np.sign(forecast_values) != 0]) == np.sign(realized_values[np.sign(forecast_values) != 0]))
         ) if np.any(np.sign(forecast_values) != 0) else math.nan
+        purged_sample = _purged_sample(sample, horizon=horizon, embargo_bars=max(1, horizon // 5))
+        purged_forecast_values = purged_sample[forecast_column].astype(float).to_numpy() if not purged_sample.empty else np.array([], dtype=float)
+        purged_realized_values = purged_sample[realized_column].astype(float).to_numpy() if not purged_sample.empty else np.array([], dtype=float)
+        purged_correlation = (
+            float(np.corrcoef(purged_forecast_values, purged_realized_values)[0, 1])
+            if purged_sample.shape[0] > 1 and np.std(purged_forecast_values) > 0 and np.std(purged_realized_values) > 0
+            else math.nan
+        )
+        purged_directional_accuracy = (
+            float(np.mean(np.sign(purged_forecast_values) == np.sign(purged_realized_values)))
+            if purged_sample.shape[0] > 0
+            else math.nan
+        )
+        purged_mae = (
+            float(np.mean(np.abs(purged_forecast_values - purged_realized_values)))
+            if purged_sample.shape[0] > 0
+            else math.nan
+        )
+        purged_rmse = (
+            float(np.sqrt(np.mean(np.square(purged_forecast_values - purged_realized_values))))
+            if purged_sample.shape[0] > 0
+            else math.nan
+        )
 
         metrics_rows.append(
             {
                 "horizon_bars": horizon,
                 "observations": int(sample.shape[0]),
+                "purged_observations": int(purged_sample.shape[0]),
                 "forecast_column": forecast_column,
                 "correlation": correlation,
+                "purged_correlation": purged_correlation,
                 "mae": mae,
+                "purged_mae": purged_mae,
                 "rmse": rmse,
+                "purged_rmse": purged_rmse,
                 "bias": bias,
                 "directional_accuracy": directional_accuracy,
+                "purged_directional_accuracy": purged_directional_accuracy,
                 "directional_accuracy_nonzero": hit_rate_nonzero,
                 "forecast_mean": float(np.mean(forecast_values)),
                 "realized_mean": float(np.mean(realized_values)),
@@ -88,14 +116,17 @@ def compute_forecast_diagnostics(steps_frame: pd.DataFrame) -> tuple[pd.DataFram
             ),
             "uses_shuffled_folds": False,
             "retrain_per_split": False,
+            "overlap_aware_reporting": True,
+            "purging_rule": "Per-horizon purged evaluation subsample using non-overlapping forecast windows plus a small embargo.",
             "notes": (
                 "This is appropriate for the current rule-based online forecaster. "
                 "For future fitted ML models we should add explicit walk-forward retraining and, "
-                "when horizons overlap materially, purging and embargo."
+                "when searching many variants, purging/embargo at split construction plus multiple-testing controls."
             ),
         },
         "forecastability": _forecastability_metrics(frame),
         "aggregate_signal": _aggregate_signal_metrics(frame),
+        "recommended_horizons": _recommended_horizons(pd.DataFrame(metrics_rows)),
     }
     return metrics_frame, summary
 
@@ -150,6 +181,29 @@ def _aggregate_signal_metrics(frame: pd.DataFrame) -> dict[str, float]:
     return metrics
 
 
+def _recommended_horizons(metrics_frame: pd.DataFrame) -> dict[str, float]:
+    if metrics_frame.empty:
+        return {}
+    working = metrics_frame.copy()
+    working = working.loc[working["purged_observations"] >= 20]
+    if working.empty:
+        return {}
+    working["selection_score"] = (
+        working["purged_correlation"].fillna(-1.0) * 0.7
+        + (working["purged_directional_accuracy"].fillna(0.5) - 0.5) * 0.3
+    )
+    ranked = working.sort_values(["selection_score", "purged_observations"], ascending=False)
+    top = ranked.iloc[0]
+    payload: dict[str, float] = {
+        "best_horizon_bars": float(top["horizon_bars"]),
+        "best_horizon_selection_score": float(top["selection_score"]),
+    }
+    for idx, (_, row) in enumerate(ranked.head(3).iterrows(), start=1):
+        payload[f"top_{idx}_horizon_bars"] = float(row["horizon_bars"])
+        payload[f"top_{idx}_horizon_selection_score"] = float(row["selection_score"])
+    return payload
+
+
 def _safe_autocorrelation(values: np.ndarray, lag: int) -> float:
     if values.size <= lag:
         return math.nan
@@ -176,6 +230,20 @@ def _spectral_entropy(values: np.ndarray) -> float:
     entropy = -float(np.sum(probs * np.log(probs + 1e-12)))
     max_entropy = math.log(len(probs)) if len(probs) > 1 else 1.0
     return entropy / max(max_entropy, 1e-12)
+
+
+def _purged_sample(sample: pd.DataFrame, *, horizon: int, embargo_bars: int) -> pd.DataFrame:
+    if sample.empty:
+        return sample
+    stride = max(1, horizon + embargo_bars)
+    selected_rows = []
+    next_allowed = 0
+    for idx in range(len(sample)):
+        if idx < next_allowed:
+            continue
+        selected_rows.append(idx)
+        next_allowed = idx + stride
+    return sample.iloc[selected_rows].reset_index(drop=True)
 
 
 def load_backtest_steps(artifact_dir: str | Path) -> pd.DataFrame:
