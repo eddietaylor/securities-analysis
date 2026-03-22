@@ -23,7 +23,8 @@ def build_backtest_dashboard(
     if steps_frame.empty:
         raise ValueError(f"No backtest steps found in {artifact_path}")
 
-    steps_frame = _prepare_steps_frame(steps_frame)
+    initial_equity = _infer_initial_equity(summary)
+    steps_frame = _prepare_steps_frame(steps_frame, initial_equity=initial_equity)
     output = Path(output_path) if output_path else artifact_path / "dashboard.html"
 
     chart_paths = _generate_dashboard_charts(artifact_path, steps_frame, summary["symbol"])
@@ -134,7 +135,7 @@ def build_registry_dashboard_index(
     return output
 
 
-def _prepare_steps_frame(steps_frame: pd.DataFrame) -> pd.DataFrame:
+def _prepare_steps_frame(steps_frame: pd.DataFrame, *, initial_equity: float) -> pd.DataFrame:
     frame = steps_frame.copy()
     frame["timestamp"] = pd.to_datetime(frame["timestamp"])
     frame["running_max"] = frame["equity"].cummax()
@@ -144,6 +145,11 @@ def _prepare_steps_frame(steps_frame: pd.DataFrame) -> pd.DataFrame:
     frame["cumulative_gross_return"] = (1.0 + frame["gross_return"]).cumprod() - 1.0
     frame["cumulative_net_return"] = (1.0 + frame["net_return"]).cumprod() - 1.0
     frame["cumulative_cost_drag"] = frame["cost_return"].cumsum()
+    first_close = float(frame["close_price"].iloc[0])
+    frame["buy_hold_equity"] = initial_equity * (frame["close_price"] / max(first_close, 1e-8))
+    frame["buy_hold_running_max"] = frame["buy_hold_equity"].cummax()
+    frame["buy_hold_drawdown"] = frame["buy_hold_equity"] / frame["buy_hold_running_max"] - 1.0
+    frame["buy_hold_cumulative_return"] = frame["buy_hold_equity"] / max(initial_equity, 1e-8) - 1.0
     return frame
 
 
@@ -165,14 +171,20 @@ def _generate_dashboard_charts(
     generated: dict[str, str] = {}
 
     figure, axes = plt.subplots(3, 1, figsize=(12, 10), sharex=True)
-    axes[0].plot(steps_frame["timestamp"], steps_frame["equity"], color="#0b84a5")
-    axes[0].set_title(f"{symbol} Equity Curve")
+    axes[0].plot(steps_frame["timestamp"], steps_frame["equity"], color="#0b84a5", label="Strategy")
+    if "buy_hold_equity" in steps_frame.columns:
+        axes[0].plot(steps_frame["timestamp"], steps_frame["buy_hold_equity"], color="#7f7f7f", linestyle="--", label="Buy & Hold")
+    axes[0].set_title(f"{symbol} Equity Curve vs Buy & Hold")
     axes[0].set_ylabel("Equity")
+    axes[0].legend()
     axes[0].grid(True, alpha=0.25)
 
-    axes[1].fill_between(steps_frame["timestamp"], steps_frame["drawdown"], 0.0, color="#d1495b", alpha=0.35)
-    axes[1].set_title("Drawdown")
+    axes[1].fill_between(steps_frame["timestamp"], steps_frame["drawdown"], 0.0, color="#d1495b", alpha=0.35, label="Strategy")
+    if "buy_hold_drawdown" in steps_frame.columns:
+        axes[1].plot(steps_frame["timestamp"], steps_frame["buy_hold_drawdown"], color="#7f7f7f", linestyle="--", label="Buy & Hold")
+    axes[1].set_title("Drawdown vs Buy & Hold")
     axes[1].set_ylabel("Drawdown")
+    axes[1].legend()
     axes[1].grid(True, alpha=0.25)
 
     axes[2].plot(steps_frame["timestamp"], steps_frame["target_position"], color="#4c956c")
@@ -208,7 +220,9 @@ def _generate_dashboard_charts(
     figure, axes = plt.subplots(2, 1, figsize=(12, 7))
     axes[0].plot(steps_frame["timestamp"], steps_frame["cumulative_gross_return"], label="Gross", color="#0b84a5")
     axes[0].plot(steps_frame["timestamp"], steps_frame["cumulative_net_return"], label="Net", color="#4c956c")
-    axes[0].set_title("Gross vs Net Cumulative Return")
+    if "buy_hold_cumulative_return" in steps_frame.columns:
+        axes[0].plot(steps_frame["timestamp"], steps_frame["buy_hold_cumulative_return"], label="Buy & Hold", color="#7f7f7f", linestyle="--")
+    axes[0].set_title("Gross / Net / Buy & Hold Cumulative Return")
     axes[0].legend()
     axes[0].grid(True, alpha=0.25)
 
@@ -256,6 +270,11 @@ def _render_backtest_dashboard_html(
     strategy_spec = runtime_spec.get("strategy", {})
     risk_spec = runtime_spec.get("risk", {})
     costs = metadata.get("costs", {})
+    buy_hold_return = float(steps_frame["buy_hold_cumulative_return"].iloc[-1]) if "buy_hold_cumulative_return" in steps_frame.columns else None
+    strategy_return = summary.get("cumulative_return")
+    excess_vs_buy_hold = None
+    if buy_hold_return is not None and strategy_return is not None:
+        excess_vs_buy_hold = float(strategy_return) - float(buy_hold_return)
 
     trade_frame = steps_frame.loc[steps_frame["turnover_fraction"] > 0, [
         "timestamp",
@@ -279,6 +298,8 @@ def _render_backtest_dashboard_html(
     cards = [
         ("Final Equity", _fmt_money(summary.get("final_equity"))),
         ("Cumulative Return", _fmt_pct(summary.get("cumulative_return"))),
+        ("Buy & Hold Return", _fmt_pct(buy_hold_return)),
+        ("Excess vs Buy & Hold", _fmt_pct(excess_vs_buy_hold)),
         ("Sharpe Ratio", _fmt_float(risk_report.get("sharpe_ratio"))),
         ("Max Drawdown", _fmt_pct(risk_report.get("max_drawdown"))),
         ("Trades", str(summary.get("trades", ""))),
@@ -476,6 +497,44 @@ def _generate_forecast_charts(
             plt.close(figure)
             generated["forecast_vs_realized"] = path.name
 
+    contribution_columns = [column for column in working.columns if "_coef_contrib_" in column]
+    importance_columns = [column for column in working.columns if "feature_importance_" in column]
+    diagnostic_columns = contribution_columns or importance_columns
+    if diagnostic_columns:
+        contribution_frame = working[diagnostic_columns].dropna(how="all")
+        if not contribution_frame.empty:
+            avg_abs = contribution_frame.abs().mean().sort_values(ascending=False).head(18)
+            figure, ax = plt.subplots(figsize=(12, 6))
+            ax.barh(avg_abs.index[::-1], avg_abs.values[::-1], color="#4c956c")
+            chart_title = "Average Absolute Feature Contribution" if contribution_columns else "Average Feature Importance"
+            axis_label = "Mean absolute contribution" if contribution_columns else "Mean importance"
+            ax.set_title(chart_title)
+            ax.set_xlabel(axis_label)
+            ax.grid(True, axis="x", alpha=0.25)
+            path = chart_dir / "feature_contributions_avg_abs.png"
+            figure.tight_layout()
+            figure.savefig(path, dpi=150, bbox_inches="tight")
+            plt.close(figure)
+            generated["feature_contributions_avg_abs"] = path.name
+
+            latest_idx = contribution_frame.index[-1]
+            latest_contrib = contribution_frame.loc[latest_idx].dropna()
+            if not latest_contrib.empty:
+                latest_contrib = latest_contrib.reindex(latest_contrib.abs().sort_values(ascending=False).index).head(18)
+                figure, ax = plt.subplots(figsize=(12, 6))
+                colors = ["#0b84a5" if value >= 0 else "#d1495b" for value in latest_contrib.values[::-1]]
+                ax.barh(latest_contrib.index[::-1], latest_contrib.values[::-1], color=colors)
+                latest_title = "Latest Feature Contribution Snapshot" if contribution_columns else "Latest Feature Importance Snapshot"
+                latest_axis_label = "Contribution" if contribution_columns else "Importance"
+                ax.set_title(latest_title)
+                ax.set_xlabel(latest_axis_label)
+                ax.grid(True, axis="x", alpha=0.25)
+                path = chart_dir / "feature_contributions_latest.png"
+                figure.tight_layout()
+                figure.savefig(path, dpi=150, bbox_inches="tight")
+                plt.close(figure)
+                generated["feature_contributions_latest"] = path.name
+
     return generated
 
 
@@ -491,8 +550,10 @@ def _render_forecast_dashboard_html(
     metadata = summary.get("metadata", {})
     runtime_spec = metadata.get("runtime_spec", {})
     strategy_spec = runtime_spec.get("strategy", {})
+    validation_method = diagnostics_summary.get("validation_method", {})
     forecastability = diagnostics_summary.get("forecastability", {})
     aggregate_signal = diagnostics_summary.get("aggregate_signal", {})
+    recommended_horizons = diagnostics_summary.get("recommended_horizons", {})
 
     cards = [
         ("Model", str(strategy_spec.get("family", ""))),
@@ -501,9 +562,13 @@ def _render_forecast_dashboard_html(
         ("Primary Signal", str(steps_frame["signal_name"].iloc[0]) if "signal_name" in steps_frame.columns and not steps_frame.empty else ""),
     ]
 
+    validation_method_table = _dict_to_table_rows(validation_method)
     forecast_table = _dict_to_table_rows(forecastability)
     aggregate_table = _dict_to_table_rows(aggregate_signal)
+    recommended_horizons_table = _dict_to_table_rows(recommended_horizons)
     diagnostics_table = _frame_to_html(diagnostics_frame, max_rows=10)
+    feature_summary_table = _feature_summary_html(steps_frame)
+    latest_feature_snapshot_table = _latest_feature_snapshot_html(steps_frame)
 
     chart_html = "".join(
         f"<section class='panel'><h2>{escape(title)}</h2><img src='dashboard_assets/{escape(path)}' alt='{escape(title)} chart'></section>"
@@ -511,6 +576,8 @@ def _render_forecast_dashboard_html(
             ("Forecast Score and Confidence", chart_paths.get("signal_confidence", "")),
             ("Horizon Metrics", chart_paths.get("metrics_by_horizon", "")),
             ("Forecast vs Realized", chart_paths.get("forecast_vs_realized", "")),
+            ("Average Absolute Feature Contribution", chart_paths.get("feature_contributions_avg_abs", "")),
+            ("Latest Feature Contribution Snapshot", chart_paths.get("feature_contributions_latest", "")),
         ]
         if path
     )
@@ -552,12 +619,20 @@ def _render_forecast_dashboard_html(
 
     <section class="two-col">
       <div class="panel">
+        <h2>Validation Method</h2>
+        <table>{validation_method_table}</table>
+      </div>
+      <div class="panel">
         <h2>Forecastability Diagnostics</h2>
         <table>{forecast_table}</table>
       </div>
       <div class="panel">
         <h2>Aggregate Signal Diagnostics</h2>
         <table>{aggregate_table}</table>
+      </div>
+      <div class="panel">
+        <h2>Recommended Horizons</h2>
+        <table>{recommended_horizons_table}</table>
       </div>
     </section>
 
@@ -566,6 +641,17 @@ def _render_forecast_dashboard_html(
     <section class="panel">
       <h2>Horizon Validation Metrics</h2>
       {diagnostics_table}
+    </section>
+
+    <section class="two-col">
+      <div class="panel">
+        <h2>Feature Contribution Summary</h2>
+        {feature_summary_table}
+      </div>
+      <div class="panel">
+        <h2>Latest Feature Snapshot</h2>
+        {latest_feature_snapshot_table}
+      </div>
     </section>
   </main>
 </body>
@@ -666,6 +752,52 @@ def _frame_to_html(frame: pd.DataFrame, *, max_rows: int = 20) -> str:
     return trimmed.to_html(index=False, border=0, classes="dataframe")
 
 
+def _feature_summary_html(frame: pd.DataFrame) -> str:
+    contribution_columns = [column for column in frame.columns if "_coef_contrib_" in column]
+    importance_columns = [column for column in frame.columns if "feature_importance_" in column]
+    if not contribution_columns:
+        if not importance_columns:
+            return "<p>No feature contribution metadata found.</p>"
+        importance_frame = frame[importance_columns].dropna(how="all")
+        if importance_frame.empty:
+            return "<p>Feature importance columns exist but no trained model rows are populated yet.</p>"
+        summary = pd.DataFrame(
+            {
+                "feature_component": importance_frame.columns,
+                "mean_importance": importance_frame.mean().values,
+            }
+        ).sort_values("mean_importance", ascending=False)
+        return summary.head(20).to_html(index=False, border=0, classes="dataframe")
+    contribution_frame = frame[contribution_columns].dropna(how="all")
+    if contribution_frame.empty:
+        return "<p>Feature contribution columns exist but no trained model rows are populated yet.</p>"
+
+    summary = pd.DataFrame(
+        {
+            "feature_component": contribution_frame.columns,
+            "mean_abs_contribution": contribution_frame.abs().mean().values,
+            "mean_contribution": contribution_frame.mean().values,
+        }
+    ).sort_values("mean_abs_contribution", ascending=False)
+    return summary.head(20).to_html(index=False, border=0, classes="dataframe")
+
+
+def _latest_feature_snapshot_html(frame: pd.DataFrame) -> str:
+    contribution_columns = [column for column in frame.columns if "_coef_contrib_" in column]
+    importance_columns = [column for column in frame.columns if "feature_importance_" in column]
+    snapshot_columns = [column for column in frame.columns if column.endswith("_prediction_raw") or column.endswith("_train_samples") or column.endswith("_target_std")]
+    if not contribution_columns and not importance_columns and not snapshot_columns:
+        return "<p>No model-state diagnostics found.</p>"
+
+    model_state = frame[contribution_columns + importance_columns + snapshot_columns].dropna(how="all")
+    if model_state.empty:
+        return "<p>Model-state diagnostics are not populated yet.</p>"
+
+    latest = model_state.iloc[-1].dropna()
+    latest_frame = pd.DataFrame({"metric": latest.index, "value": latest.values})
+    return latest_frame.to_html(index=False, border=0, classes="dataframe")
+
+
 def _load_registry(path: str | Path) -> list[dict[str, Any]]:
     registry_path = Path(path)
     if not registry_path.exists():
@@ -707,3 +839,12 @@ def _fmt_generic(value: Any) -> str:
             return f"{value:.6f}"
         return f"{value:.4f}"
     return str(value)
+
+
+def _infer_initial_equity(summary: dict[str, Any]) -> float:
+    final_equity = float(summary.get("final_equity", 0.0))
+    cumulative_return = float(summary.get("cumulative_return", 0.0))
+    denominator = 1.0 + cumulative_return
+    if abs(denominator) < 1e-12:
+        return final_equity
+    return final_equity / denominator

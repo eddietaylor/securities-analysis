@@ -6,6 +6,17 @@
 - author: Valery Manokhin
 - role in this repo: primary forecasting reference for model design, evaluation discipline, feature engineering, and model-family selection
 
+## Secondary Reference
+
+- `docs/references/GPT Deep Research Multi-horizon Forecasting for Algorithmic Trading.pdf`
+- role in this repo: concise synthesis of practical multi-horizon forecasting design choices specifically for trading systems
+
+Why it matters:
+
+- it reinforces several directions we were already moving toward
+- it is more explicit about direct multi-horizon learning, probabilistic evaluation, and leakage control in trading workflows
+- it sharpens the transition point from linear baselines to stronger nonlinear tabular models
+
 ## Why This Book Matters For This Project
 
 This repo is no longer only a trading bot prototype. It is becoming a forecasting and decision system with:
@@ -237,6 +248,31 @@ These points line up very well with the direction of this repo:
 - feature engineering is often the real edge in practical forecasting
 - simpler models often beat fancier ones
 - multivariate and multi-horizon forecasting should be data-driven, not hype-driven
+
+## What The GPT Deep Research Report Added
+
+The report is not replacing the main textbook, but it did sharpen the practical roadmap.
+
+Most useful additions:
+
+1. direct multi-horizon forecasting should be preferred over vague single-score heuristics
+2. gradient-boosted trees are a very strong next nonlinear baseline for engineered tabular features
+3. sequence models belong later, after tabular nonlinear baselines
+4. probabilistic evaluation and later conformal layers should be part of the design target
+5. horizon choice should be discovered empirically
+6. trading validation must respect overlapping labels, purging, embargo, and multiple-testing discipline
+
+Practical repo implication:
+
+- we should keep `feature_linear_forecast` as the benchmark baseline
+- then test `feature_boosted_forecast`
+- then only later move toward heavier sequence models such as TCN / PatchTST / TFT-style families if simpler models justify the complexity
+
+It also reinforced that the evaluation stack should eventually include:
+
+- purged / embargoed split logic
+- probabilistic forecast scoring
+- PBO / Deflated Sharpe when model search becomes broad
 
 ## What We Should Pull Into The Project Soon
 

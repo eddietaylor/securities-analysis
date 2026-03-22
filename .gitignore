@@ -150,6 +150,10 @@ dmypy.json
 
 # generated research and backtest artifacts
 artifacts/
+catboost_info/
+
+# local editor config
+.vscode/
 
 # local reference payloads
 docs/references/*.pdf

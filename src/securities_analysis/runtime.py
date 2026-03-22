@@ -16,6 +16,7 @@ class StrategySpec:
     allow_short: bool = False
     mean_reversion_entry_zscore: float = 1.0
     mean_reversion_exit_zscore: float = 0.25
+    max_train_samples: int | None = None
 
     def build(self, symbol: str, periods_per_year: int) -> StrategyProtocol:
         return build_strategy(
@@ -29,6 +30,7 @@ class StrategySpec:
             allow_short=self.allow_short,
             mean_reversion_entry_zscore=self.mean_reversion_entry_zscore,
             mean_reversion_exit_zscore=self.mean_reversion_exit_zscore,
+            max_train_samples=self.max_train_samples,
         )
 
     def describe(self) -> str:
@@ -45,6 +47,9 @@ class StrategySpec:
                 f" entry_z={self.mean_reversion_entry_zscore:.3f} "
                 f"exit_z={self.mean_reversion_exit_zscore:.3f}"
             )
+        if self.family in {"feature_linear_forecast", "feature_boosted_forecast", "regime_timing_linear_forecast"}:
+            train_text = "expanding" if not self.max_train_samples else str(self.max_train_samples)
+            description += f" max_train_samples={train_text}"
         return description
 
     def to_dict(self) -> dict[str, object]:
@@ -129,6 +134,7 @@ def strategy_spec_from_args(args) -> StrategySpec:
         allow_short=args.allow_short,
         mean_reversion_entry_zscore=args.mean_reversion_entry_zscore,
         mean_reversion_exit_zscore=args.mean_reversion_exit_zscore,
+        max_train_samples=(args.max_train_samples if args.max_train_samples and args.max_train_samples > 0 else None),
     )
 
 
