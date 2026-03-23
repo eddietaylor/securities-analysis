@@ -28,6 +28,7 @@ class ForecastabilityScanResult:
     variance_ratio_20: float
     spectral_entropy: float
     momentum_forecastability_score: float
+    mean_reversion_forecastability_score: float
 
 
 def scan_forecastability(
@@ -37,6 +38,7 @@ def scan_forecastability(
     start: str,
     end: str,
     freq: str,
+    objective: str = "momentum",
 ) -> pd.DataFrame:
     rows: list[dict[str, object]] = []
     for item in universe:
@@ -59,8 +61,13 @@ def scan_forecastability(
     if not rows:
         return pd.DataFrame()
     frame = pd.DataFrame(rows)
+    score_column = (
+        "mean_reversion_forecastability_score"
+        if objective == "mean_reversion"
+        else "momentum_forecastability_score"
+    )
     frame = frame.sort_values(
-        ["momentum_forecastability_score", "observations"],
+        [score_column, "observations"],
         ascending=[False, False],
     ).reset_index(drop=True)
     frame["rank"] = np.arange(1, len(frame) + 1)
@@ -79,6 +86,7 @@ def scan_forecastability(
             "variance_ratio_20",
             "spectral_entropy",
             "momentum_forecastability_score",
+            "mean_reversion_forecastability_score",
         ]
     ]
 
@@ -137,6 +145,7 @@ def _scan_single_symbol(
     vr20 = _variance_ratio(returns, 20)
     entropy = _spectral_entropy(returns)
     score = _momentum_forecastability_score(lag1=lag1, vr5=vr5, vr20=vr20, entropy=entropy)
+    mr_score = _mean_reversion_forecastability_score(lag1=lag1, vr5=vr5, vr20=vr20, entropy=entropy)
     return ForecastabilityScanResult(
         symbol=symbol,
         asset_class=asset_class,
@@ -150,6 +159,7 @@ def _scan_single_symbol(
         variance_ratio_20=vr20,
         spectral_entropy=entropy,
         momentum_forecastability_score=score,
+        mean_reversion_forecastability_score=mr_score,
     )
 
 
@@ -168,6 +178,25 @@ def _momentum_forecastability_score(
         0.35 * lag_component
         + 0.20 * vr5_component
         + 0.30 * vr20_component
+        + 0.15 * entropy_component
+    )
+
+
+def _mean_reversion_forecastability_score(
+    *,
+    lag1: float,
+    vr5: float,
+    vr20: float,
+    entropy: float,
+) -> float:
+    lag_component = 0.0 if math.isnan(lag1) else max(min(-lag1, 0.25), -0.25) / 0.25
+    vr5_component = 0.0 if math.isnan(vr5) else max(min(1.0 - vr5, 1.0), -1.0)
+    vr20_component = 0.0 if math.isnan(vr20) else max(min(1.0 - vr20, 1.0), -1.0)
+    entropy_component = 0.0 if math.isnan(entropy) else 1.0 - max(min(entropy, 1.0), 0.0)
+    return (
+        0.40 * lag_component
+        + 0.25 * vr5_component
+        + 0.20 * vr20_component
         + 0.15 * entropy_component
     )
 

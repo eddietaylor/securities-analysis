@@ -150,6 +150,10 @@ def _prepare_steps_frame(steps_frame: pd.DataFrame, *, initial_equity: float) ->
     frame["buy_hold_running_max"] = frame["buy_hold_equity"].cummax()
     frame["buy_hold_drawdown"] = frame["buy_hold_equity"] / frame["buy_hold_running_max"] - 1.0
     frame["buy_hold_cumulative_return"] = frame["buy_hold_equity"] / max(initial_equity, 1e-8) - 1.0
+    if "market_buy_hold_cumulative_return" in frame.columns:
+        frame["market_buy_hold_equity"] = initial_equity * (1.0 + frame["market_buy_hold_cumulative_return"].astype(float))
+        frame["market_buy_hold_running_max"] = frame["market_buy_hold_equity"].cummax()
+        frame["market_buy_hold_drawdown"] = frame["market_buy_hold_equity"] / frame["market_buy_hold_running_max"] - 1.0
     return frame
 
 
@@ -174,6 +178,8 @@ def _generate_dashboard_charts(
     axes[0].plot(steps_frame["timestamp"], steps_frame["equity"], color="#0b84a5", label="Strategy")
     if "buy_hold_equity" in steps_frame.columns:
         axes[0].plot(steps_frame["timestamp"], steps_frame["buy_hold_equity"], color="#7f7f7f", linestyle="--", label="Buy & Hold")
+    if "market_buy_hold_equity" in steps_frame.columns:
+        axes[0].plot(steps_frame["timestamp"], steps_frame["market_buy_hold_equity"], color="#3d348b", linestyle=":", label="Market Benchmark")
     axes[0].set_title(f"{symbol} Equity Curve vs Buy & Hold")
     axes[0].set_ylabel("Equity")
     axes[0].legend()
@@ -182,6 +188,8 @@ def _generate_dashboard_charts(
     axes[1].fill_between(steps_frame["timestamp"], steps_frame["drawdown"], 0.0, color="#d1495b", alpha=0.35, label="Strategy")
     if "buy_hold_drawdown" in steps_frame.columns:
         axes[1].plot(steps_frame["timestamp"], steps_frame["buy_hold_drawdown"], color="#7f7f7f", linestyle="--", label="Buy & Hold")
+    if "market_buy_hold_drawdown" in steps_frame.columns:
+        axes[1].plot(steps_frame["timestamp"], steps_frame["market_buy_hold_drawdown"], color="#3d348b", linestyle=":", label="Market Benchmark")
     axes[1].set_title("Drawdown vs Buy & Hold")
     axes[1].set_ylabel("Drawdown")
     axes[1].legend()
@@ -222,6 +230,8 @@ def _generate_dashboard_charts(
     axes[0].plot(steps_frame["timestamp"], steps_frame["cumulative_net_return"], label="Net", color="#4c956c")
     if "buy_hold_cumulative_return" in steps_frame.columns:
         axes[0].plot(steps_frame["timestamp"], steps_frame["buy_hold_cumulative_return"], label="Buy & Hold", color="#7f7f7f", linestyle="--")
+    if "market_buy_hold_cumulative_return" in steps_frame.columns:
+        axes[0].plot(steps_frame["timestamp"], steps_frame["market_buy_hold_cumulative_return"], label="Market Benchmark", color="#3d348b", linestyle=":")
     axes[0].set_title("Gross / Net / Buy & Hold Cumulative Return")
     axes[0].legend()
     axes[0].grid(True, alpha=0.25)
@@ -271,10 +281,20 @@ def _render_backtest_dashboard_html(
     risk_spec = runtime_spec.get("risk", {})
     costs = metadata.get("costs", {})
     buy_hold_return = float(steps_frame["buy_hold_cumulative_return"].iloc[-1]) if "buy_hold_cumulative_return" in steps_frame.columns else None
+    market_buy_hold_return = float(steps_frame["market_buy_hold_cumulative_return"].iloc[-1]) if "market_buy_hold_cumulative_return" in steps_frame.columns else None
     strategy_return = summary.get("cumulative_return")
     excess_vs_buy_hold = None
+    excess_vs_market_buy_hold = None
     if buy_hold_return is not None and strategy_return is not None:
         excess_vs_buy_hold = float(strategy_return) - float(buy_hold_return)
+    if market_buy_hold_return is not None and strategy_return is not None:
+        excess_vs_market_buy_hold = float(strategy_return) - float(market_buy_hold_return)
+    panel_backtest = metadata.get("panel_backtest", {})
+    market_benchmark_symbol = str(
+        panel_backtest.get("market_benchmark_symbol", "")
+        or metadata.get("market_benchmark_symbol", "")
+        or "SPY"
+    )
 
     trade_frame = steps_frame.loc[steps_frame["turnover_fraction"] > 0, [
         "timestamp",
@@ -300,6 +320,8 @@ def _render_backtest_dashboard_html(
         ("Cumulative Return", _fmt_pct(summary.get("cumulative_return"))),
         ("Buy & Hold Return", _fmt_pct(buy_hold_return)),
         ("Excess vs Buy & Hold", _fmt_pct(excess_vs_buy_hold)),
+        (f"{market_benchmark_symbol} Buy & Hold Return", _fmt_pct(market_buy_hold_return)),
+        (f"Excess vs {market_benchmark_symbol}", _fmt_pct(excess_vs_market_buy_hold)),
         ("Sharpe Ratio", _fmt_float(risk_report.get("sharpe_ratio"))),
         ("Max Drawdown", _fmt_pct(risk_report.get("max_drawdown"))),
         ("Trades", str(summary.get("trades", ""))),

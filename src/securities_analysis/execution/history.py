@@ -110,6 +110,13 @@ def build_history_provider(
         return AlpacaHistoryProvider(trader=trader)
     if history_provider == "yfinance":
         resolved_cache = Path(cache_dir) if cache_dir else Path("artifacts") / "data_cache" / "yfinance"
+        resolved_cache.mkdir(parents=True, exist_ok=True)
+        tz_cache_dir = resolved_cache / "tz_cache"
+        tz_cache_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            yf.set_tz_cache_location(str(tz_cache_dir))
+        except AttributeError:
+            pass
         return YFinanceHistoryProvider(cache_dir=resolved_cache)
     raise ValueError(f"Unknown history provider: {history_provider}")
 
