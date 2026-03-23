@@ -401,3 +401,50 @@ These notes should drive the next implementation steps:
 3. implement a first multiscale forecaster
 4. add forecast-quality metrics to the research harness
 5. later add multivariate covariates and conformal uncertainty
+
+## Future Architecture Note
+
+The project should keep researching the shared multi-instrument forecasting architecture that is currently producing the strongest momentum sleeve.
+
+Important distinction:
+
+- it is not a true joint multi-output model
+- but it is more than a purely local per-symbol model
+
+Current winning form:
+
+- one shared model
+- many instruments in the universe
+- one forecast target per row
+- multivariate inputs and repeated walk-forward retraining
+
+This architecture is worth continuing to study because it may be a practical middle ground between:
+
+- tiny local models with too little data
+- and much more complex fully joint sequence models
+
+## Future Decision Layer Note
+
+The project should also treat `forecasting` and `decision-making` as separate research problems.
+
+Current decision layer is simple:
+
+- rank forecasts
+- pick top names
+- rebalance on a fixed schedule
+
+This is a good baseline, but not necessarily the best use of the forecasts.
+
+Future decision-layer research ideas:
+
+- optimize allocations using:
+  - forecast mean
+  - forecast uncertainty
+  - turnover cost
+  - diversification structure
+  - risk constraints
+- compare fixed rules against explicit decision optimization
+- later explore RL-like long-horizon reward optimization only after:
+  - strong benchmark decision rules exist
+  - uncertainty estimates are credible
+  - validation discipline for policy learning is well defined

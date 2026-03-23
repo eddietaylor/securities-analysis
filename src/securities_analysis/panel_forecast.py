@@ -34,6 +34,7 @@ class PanelForecastConfig:
     catboost_eval_metric: str = "RMSE"
     catboost_early_stopping_rounds: int = 50
     catboost_validation_fraction: float = 0.15
+    catboost_thread_count: int = -1
     random_state: int = 7
     include_symbol_identity: bool = False
     include_bucket_metadata: bool = True
@@ -174,6 +175,7 @@ def evaluate_global_panel_forecast(
             "catboost_eval_metric": config.catboost_eval_metric,
             "catboost_early_stopping_rounds": config.catboost_early_stopping_rounds,
             "catboost_validation_fraction": config.catboost_validation_fraction,
+            "catboost_thread_count": config.catboost_thread_count,
             "random_state": config.random_state,
             "include_symbol_identity": config.include_symbol_identity,
             "include_bucket_metadata": config.include_bucket_metadata,
@@ -288,6 +290,7 @@ def _fit_catboost_model(
         has_time=True,
         bootstrap_type="Bayesian",
         grow_policy="SymmetricTree",
+        thread_count=config.catboost_thread_count,
         random_seed=config.random_state,
         verbose=False,
     )

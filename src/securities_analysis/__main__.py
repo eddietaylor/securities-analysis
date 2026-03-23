@@ -4,6 +4,8 @@ import argparse
 from datetime import datetime
 from pathlib import Path
 
+import pandas as pd
+
 from securities_analysis.backtest.costs import ExecutionCostModel
 from securities_analysis.backtest.engine import StrategyBacktester
 from securities_analysis.backtest.reporting import save_backtest_artifacts
@@ -40,8 +42,26 @@ from securities_analysis.panel_forecast import (
     load_panel_dataset,
     save_panel_forecast_artifacts,
 )
+from securities_analysis.panel_backtest import (
+    PanelBacktestConfig,
+    default_panel_backtest_output_dir,
+    evaluate_panel_prediction_backtest,
+    load_market_benchmark_frame,
+    load_panel_predictions,
+    save_panel_backtest_artifacts,
+)
+from securities_analysis.portfolio_blend import (
+    default_portfolio_blend_output_dir,
+    evaluate_portfolio_blends,
+    load_backtest_steps_frame,
+    save_portfolio_blend_artifacts,
+)
 from securities_analysis.runtime import risk_spec_from_args, runtime_spec_from_args
 from securities_analysis.runtime import strategy_spec_from_args
+from securities_analysis.shortlist_research import (
+    default_shortlist_research_output_dir,
+    run_shortlist_research,
+)
 from securities_analysis.services.mvp_execution import MvpExecutionService
 from securities_analysis.services.paper_trading import PaperTradingService
 from securities_analysis.strategies import StrategyProtocol, build_strategy
@@ -169,6 +189,11 @@ def build_parser() -> argparse.ArgumentParser:
     backtest_parser.add_argument(
         "--output-dir",
         help="Optional output directory for saved backtest artifacts",
+    )
+    backtest_parser.add_argument(
+        "--market-benchmark-symbol",
+        default="SPY",
+        help="External market benchmark to compare against regardless of traded symbol, e.g. SPY or VOO.",
     )
     research_parser = subparsers.add_parser(
         "research",
@@ -521,6 +546,121 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional output directory for saved panel forecast artifacts",
     )
 
+    panel_backtest_parser = subparsers.add_parser(
+        "panel-backtest",
+        help="Backtest a portfolio built from saved panel forecast predictions",
+    )
+    panel_backtest_parser.add_argument(
+        "--forecast-dir",
+        required=True,
+        help="Path to a panel forecast artifact directory containing panel_predictions.csv",
+    )
+    panel_backtest_parser.add_argument(
+        "--horizon",
+        type=int,
+        required=True,
+        help="Forecast horizon column to trade, e.g. 120 uses panel_pred_h120.",
+    )
+    panel_backtest_parser.add_argument(
+        "--top-k",
+        type=int,
+        default=3,
+        help="How many top forecasts to hold on each rebalance date.",
+    )
+    panel_backtest_parser.add_argument(
+        "--rebalance-every-dates",
+        type=int,
+        default=5,
+        help="Rebalance cadence in unique dates.",
+    )
+    panel_backtest_parser.add_argument(
+        "--initial-equity",
+        type=float,
+        default=100000.0,
+        help="Starting equity for the panel portfolio backtest.",
+    )
+    panel_backtest_parser.add_argument(
+        "--target-gross-leverage",
+        type=float,
+        default=1.0,
+        help="Total gross exposure assigned across active positions.",
+    )
+    panel_backtest_parser.add_argument(
+        "--long-threshold",
+        type=float,
+        default=0.0,
+        help="Minimum forecast needed to enter a long position.",
+    )
+    panel_backtest_parser.add_argument(
+        "--allow-short",
+        action="store_true",
+        help="Enable symmetric long-short ranking instead of long-only selection.",
+    )
+    panel_backtest_parser.add_argument(
+        "--periods-per-year",
+        type=int,
+        default=252,
+        help="Annualization factor for portfolio risk metrics.",
+    )
+    panel_backtest_parser.add_argument(
+        "--spread-bps",
+        type=float,
+        default=0.0,
+        help="Synthetic spread applied in the backtest cost model.",
+    )
+    panel_backtest_parser.add_argument(
+        "--commission-bps",
+        type=float,
+        default=0.0,
+        help="Commission bps in the backtest cost model.",
+    )
+    panel_backtest_parser.add_argument(
+        "--slippage-bps",
+        type=float,
+        default=2.0,
+        help="Slippage bps in the backtest cost model.",
+    )
+    panel_backtest_parser.add_argument(
+        "--market-impact-bps-per-turnover",
+        type=float,
+        default=5.0,
+        help="Impact bps charged per unit of turnover.",
+    )
+    panel_backtest_parser.add_argument(
+        "--output-dir",
+        help="Optional output directory for saved panel backtest artifacts",
+    )
+    panel_backtest_parser.add_argument(
+        "--market-benchmark-symbol",
+        default="SPY",
+        help="External market benchmark to compare against regardless of traded universe, e.g. SPY or VOO.",
+    )
+
+    blend_parser = subparsers.add_parser(
+        "portfolio-blend",
+        help="Evaluate how a sleeve backtest behaves when blended with the market benchmark return stream",
+    )
+    blend_parser.add_argument(
+        "--artifact-dir",
+        required=True,
+        help="Backtest artifact directory containing steps.csv with market benchmark cumulative returns.",
+    )
+    blend_parser.add_argument(
+        "--sleeve-weights",
+        default="0,0.1,0.2,0.3,0.4,0.5",
+        help="Comma-separated sleeve weights to evaluate against the market benchmark.",
+    )
+    blend_parser.add_argument(
+        "--periods-per-year",
+        type=int,
+        default=252,
+        help="Annualization factor for portfolio risk metrics.",
+    )
+    blend_parser.add_argument(
+        "--output-dir",
+        help="Optional output directory for saved blend analysis artifacts",
+    )
+
     forecastability_parser = subparsers.add_parser(
         "forecastability-scan",
         help="Rank a symbol universe on high-level forecastability diagnostics without fitting forecasting models",
@@ -558,6 +698,163 @@ def build_parser() -> argparse.ArgumentParser:
     forecastability_parser.add_argument(
         "--output-dir",
         help="Optional output directory for saved scan artifacts",
+    )
+    forecastability_parser.add_argument(
+        "--objective",
+        default="momentum",
+        choices=["momentum", "mean_reversion"],
+        help="Ranking objective for the structural scan.",
+    )
+
+    shortlist_parser = subparsers.add_parser(
+        "shortlist-research",
+        help="Run the research funnel: forecastability scan, shortlist selection, then dataset/model evaluation on the shortlist",
+    )
+    shortlist_parser.add_argument(
+        "--universe-preset",
+        required=True,
+        choices=preset_names(),
+        help="Named universe preset to scan first.",
+    )
+    shortlist_parser.add_argument(
+        "--history-provider",
+        default="yfinance",
+        choices=["alpaca", "yfinance"],
+        help="Historical market data provider for the shortlist workflow.",
+    )
+    shortlist_parser.add_argument("--start", required=True, help="Historical start date YYYY-MM-DD")
+    shortlist_parser.add_argument("--end", required=True, help="Historical end date YYYY-MM-DD")
+    shortlist_parser.add_argument(
+        "--freq",
+        default="day",
+        choices=["minute", "hour", "day", "week", "month"],
+        help="Historical bar frequency",
+    )
+    shortlist_parser.add_argument(
+        "--top-n",
+        type=int,
+        default=8,
+        help="How many top scan symbols to keep before adding any required include-symbols.",
+    )
+    shortlist_parser.add_argument(
+        "--include-symbols",
+        default="",
+        help="Comma-separated extra symbols to force into the shortlist even if not top-ranked by the scan.",
+    )
+    shortlist_parser.add_argument(
+        "--lookback-bars",
+        type=int,
+        default=60,
+        help="Primary lookback used in feature construction",
+    )
+    shortlist_parser.add_argument(
+        "--vol-lookback-bars",
+        type=int,
+        default=20,
+        help="Volatility lookback used in feature construction",
+    )
+    shortlist_parser.add_argument(
+        "--horizons",
+        default="30,45,120",
+        help="Comma-separated forecast horizons for the shortlist model run",
+    )
+    shortlist_parser.add_argument(
+        "--model-family",
+        default="linear_ridge",
+        choices=["gradient_boosting", "linear_ridge", "catboost"],
+        help="Model family for the shortlist panel forecast stage.",
+    )
+    shortlist_parser.add_argument(
+        "--min-train-dates",
+        type=int,
+        default=252,
+        help="Minimum number of unique dates before evaluation begins",
+    )
+    shortlist_parser.add_argument(
+        "--max-train-dates",
+        type=int,
+        default=0,
+        help="Maximum trailing unique dates to retain for training. Use 0 for expanding history.",
+    )
+    shortlist_parser.add_argument(
+        "--retrain-every-dates",
+        type=int,
+        default=126,
+        help="Refit cadence in unique dates",
+    )
+    shortlist_parser.add_argument(
+        "--learning-rate",
+        type=float,
+        default=0.03,
+        help="Boosting learning rate",
+    )
+    shortlist_parser.add_argument(
+        "--max-depth",
+        type=int,
+        default=2,
+        help="Tree depth for sklearn gradient boosting",
+    )
+    shortlist_parser.add_argument(
+        "--ridge-alpha",
+        type=float,
+        default=1.0,
+        help="Regularization strength for the linear ridge panel model.",
+    )
+    shortlist_parser.add_argument(
+        "--catboost-iterations",
+        type=int,
+        default=1000,
+        help="Maximum boosting iterations for CatBoost.",
+    )
+    shortlist_parser.add_argument(
+        "--catboost-depth",
+        type=int,
+        default=6,
+        help="Tree depth for CatBoost.",
+    )
+    shortlist_parser.add_argument(
+        "--catboost-l2-leaf-reg",
+        type=float,
+        default=3.0,
+        help="L2 leaf regularization for CatBoost.",
+    )
+    shortlist_parser.add_argument(
+        "--catboost-random-strength",
+        type=float,
+        default=1.0,
+        help="Random strength for CatBoost score regularization.",
+    )
+    shortlist_parser.add_argument(
+        "--catboost-bagging-temperature",
+        type=float,
+        default=1.0,
+        help="Bagging temperature for CatBoost Bayesian bootstrap.",
+    )
+    shortlist_parser.add_argument(
+        "--catboost-early-stopping-rounds",
+        type=int,
+        default=50,
+        help="Early stopping rounds for CatBoost.",
+    )
+    shortlist_parser.add_argument(
+        "--catboost-validation-fraction",
+        type=float,
+        default=0.15,
+        help="Fraction of each training window reserved as the CatBoost validation slice.",
+    )
+    shortlist_parser.add_argument(
+        "--include-symbol-identity",
+        action="store_true",
+        help="Include target symbol identity as a categorical input.",
+    )
+    shortlist_parser.add_argument(
+        "--exclude-bucket-metadata",
+        action="store_true",
+        help="Exclude asset/bucket metadata categorical inputs.",
+    )
+    shortlist_parser.add_argument(
+        "--output-dir",
+        help="Optional output directory for saved shortlist research artifacts",
     )
 
     return parser
@@ -636,6 +933,23 @@ def main() -> None:
                 market_impact_bps_per_turnover=args.market_impact_bps_per_turnover,
             ),
         ).run(bars)
+        if args.market_benchmark_symbol:
+            try:
+                market_benchmark_bars = trader.get_historical_bar_objects(
+                    ticker=args.market_benchmark_symbol,
+                    start=args.start,
+                    end=args.end,
+                    freq=args.freq,
+                    asset_class="equity",
+                )
+                market_benchmark_cumulative_returns = _benchmark_cumulative_returns_for_steps(
+                    market_benchmark_bars,
+                    result.steps,
+                )
+                for step, market_cum_return in zip(result.steps, market_benchmark_cumulative_returns):
+                    step.signal_metadata["market_buy_hold_cumulative_return"] = float(market_cum_return)
+            except Exception:
+                pass
         report = result.risk_report
         run_id = new_run_id("backtest")
         metadata = {
@@ -644,6 +958,7 @@ def main() -> None:
                 "strategy": strategy_spec.to_dict(),
                 "risk": risk_spec.to_dict(),
             },
+            "market_benchmark_symbol": args.market_benchmark_symbol,
             "costs": {
                 "spread_bps": args.spread_bps,
                 "commission_bps": args.commission_bps,
@@ -979,6 +1294,7 @@ def main() -> None:
             start=args.start,
             end=args.end,
             freq=args.freq,
+            objective=args.objective,
         )
         artifact_dir = save_forecastability_scan(
             frame,
@@ -991,11 +1307,148 @@ def main() -> None:
                 "end": args.end,
                 "freq": args.freq,
                 "history_provider": args.history_provider,
+                "objective": args.objective,
             },
         )
         print(
             "FORECASTABILITY SCAN COMPLETE | "
             f"rows={len(frame)} "
+            f"path={artifact_dir}"
+        )
+        return
+
+    if args.command == "shortlist-research":
+        metadata_map = preset_metadata(args.universe_preset)
+        asset_class = next(iter(metadata_map.values())).asset_class if metadata_map else "future"
+        if asset_class == "future" and args.history_provider != "yfinance":
+            parser.error("Futures shortlist research currently requires --history-provider yfinance.")
+        trader = None
+        if args.history_provider == "alpaca":
+            settings = load_alpaca_settings(cfg_path=args.cfg)
+            trader = AlpacaTrader(settings)
+        history_provider = build_history_provider(
+            history_provider=args.history_provider,
+            trader=trader,
+        )
+        periods_per_year = _periods_per_year_for_freq(args.freq)
+        include_symbols = _parse_str_list(args.include_symbols) if args.include_symbols else []
+        result = run_shortlist_research(
+            history_provider=history_provider,
+            universe=list(metadata_map.values()),
+            start=args.start,
+            end=args.end,
+            freq=args.freq,
+            top_n=args.top_n,
+            include_symbols=include_symbols,
+            lookback_bars=args.lookback_bars,
+            vol_lookback_bars=args.vol_lookback_bars,
+            horizons=_parse_int_grid(args.horizons),
+            periods_per_year=periods_per_year,
+            model_config=PanelForecastConfig(
+                horizons=_parse_int_grid(args.horizons),
+                model_family=args.model_family,
+                min_train_dates=args.min_train_dates,
+                max_train_dates=(args.max_train_dates if args.max_train_dates and args.max_train_dates > 0 else None),
+                retrain_every_dates=args.retrain_every_dates,
+                learning_rate=args.learning_rate,
+                max_depth=args.max_depth,
+                ridge_alpha=args.ridge_alpha,
+                catboost_iterations=args.catboost_iterations,
+                catboost_depth=args.catboost_depth,
+                catboost_l2_leaf_reg=args.catboost_l2_leaf_reg,
+                catboost_random_strength=args.catboost_random_strength,
+                catboost_bagging_temperature=args.catboost_bagging_temperature,
+                catboost_early_stopping_rounds=args.catboost_early_stopping_rounds,
+                catboost_validation_fraction=args.catboost_validation_fraction,
+                include_symbol_identity=args.include_symbol_identity,
+                include_bucket_metadata=not args.exclude_bucket_metadata,
+            ),
+            output_dir=args.output_dir or default_shortlist_research_output_dir(),
+        )
+        print(
+            "SHORTLIST RESEARCH COMPLETE | "
+            f"symbols={','.join(result.shortlist_symbols)} "
+            f"path={result.forecast_artifact_dir.parent}"
+        )
+        return
+
+    if args.command == "panel-backtest":
+        predictions_frame = load_panel_predictions(args.forecast_dir)
+        market_benchmark_frame = None
+        if args.market_benchmark_symbol:
+            history_provider = build_history_provider(history_provider="yfinance")
+            prediction_dates = sorted(pd.to_datetime(predictions_frame["timestamp"], utc=True).dropna().unique())
+            market_benchmark_frame = load_market_benchmark_frame(
+                history_provider=history_provider,
+                symbol=args.market_benchmark_symbol,
+                dates=list(prediction_dates),
+                freq="day",
+            )
+        result = evaluate_panel_prediction_backtest(
+            predictions_frame,
+            config=PanelBacktestConfig(
+                horizon_bars=args.horizon,
+                top_k=args.top_k,
+                rebalance_every_dates=args.rebalance_every_dates,
+                initial_equity=args.initial_equity,
+                target_gross_leverage=args.target_gross_leverage,
+                long_threshold=args.long_threshold,
+                allow_short=args.allow_short,
+                spread_bps=args.spread_bps,
+                periods_per_year=args.periods_per_year,
+                commission_bps=args.commission_bps,
+                slippage_bps=args.slippage_bps,
+                market_impact_bps_per_turnover=args.market_impact_bps_per_turnover,
+                market_benchmark_symbol=args.market_benchmark_symbol,
+            ),
+            market_benchmark_frame=market_benchmark_frame,
+        )
+        artifact_dir = save_panel_backtest_artifacts(
+            result,
+            output_dir=args.output_dir or default_panel_backtest_output_dir(),
+            metadata={
+                "panel_backtest": {
+                    "forecast_dir": args.forecast_dir,
+                    "horizon": args.horizon,
+                    "top_k": args.top_k,
+                    "rebalance_every_dates": args.rebalance_every_dates,
+                    "initial_equity": args.initial_equity,
+                    "target_gross_leverage": args.target_gross_leverage,
+                    "long_threshold": args.long_threshold,
+                    "allow_short": args.allow_short,
+                    "market_benchmark_symbol": args.market_benchmark_symbol,
+                },
+                "costs": {
+                    "spread_bps": args.spread_bps,
+                    "commission_bps": args.commission_bps,
+                    "slippage_bps": args.slippage_bps,
+                    "market_impact_bps_per_turnover": args.market_impact_bps_per_turnover,
+                },
+            },
+        )
+        print(
+            "PANEL BACKTEST COMPLETE | "
+            f"final_equity={result.final_equity:.2f} "
+            f"cumulative_return={result.cumulative_return:.4f} "
+            f"path={artifact_dir}"
+        )
+        return
+
+    if args.command == "portfolio-blend":
+        steps_frame = load_backtest_steps_frame(args.artifact_dir)
+        result = evaluate_portfolio_blends(
+            steps_frame,
+            periods_per_year=args.periods_per_year,
+            sleeve_weights=_parse_float_grid(args.sleeve_weights),
+        )
+        artifact_dir = save_portfolio_blend_artifacts(
+            result,
+            output_dir=args.output_dir or default_portfolio_blend_output_dir(),
+        )
+        best_sharpe = result.summary.get("best_sharpe_weight", {})
+        print(
+            "PORTFOLIO BLEND COMPLETE | "
+            f"best_sharpe_sleeve_weight={best_sharpe.get('sleeve_weight', float('nan')):.2f} "
             f"path={artifact_dir}"
         )
         return
@@ -1117,6 +1570,31 @@ def _default_backtest_output_dir(symbol: str, start: str, end: str, freq: str) -
     safe_symbol = symbol.replace("/", "_").replace("\\", "_")
     stamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
     return Path("artifacts") / "backtests" / f"{safe_symbol}_{freq}_{start}_{end}_{stamp}"
+
+
+def _benchmark_cumulative_returns_for_steps(bars: list, steps: list) -> list[float]:
+    if not bars or not steps:
+        return []
+    benchmark_frame = pd.DataFrame(
+        {
+            "timestamp": [bar.end_time for bar in bars],
+            "close_price": [bar.close_price for bar in bars],
+        }
+    )
+    benchmark_frame["timestamp"] = pd.to_datetime(benchmark_frame["timestamp"], utc=True)
+    benchmark_frame = benchmark_frame.dropna(subset=["close_price"]).sort_values("timestamp")
+    if benchmark_frame.empty:
+        return []
+    step_times = pd.DatetimeIndex(pd.to_datetime([step.bar.end_time for step in steps], utc=True))
+    benchmark_close = pd.Series(
+        benchmark_frame["close_price"].astype(float).to_numpy(),
+        index=pd.DatetimeIndex(benchmark_frame["timestamp"]),
+    )
+    aligned_close = benchmark_close.reindex(step_times).ffill().bfill()
+    if aligned_close.empty or aligned_close.isna().all():
+        return []
+    first_close = float(aligned_close.iloc[0])
+    return list((aligned_close / max(first_close, 1e-8) - 1.0).astype(float))
 
 
 def _default_research_output_dir(periods: list[ResearchPeriod], freq: str) -> Path:

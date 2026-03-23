@@ -89,6 +89,111 @@ Current doctrine:
 2. prefer cross-period robustness over peak single-period Sharpe
 3. do not add more sleeves until this process is trustworthy
 
+## 2026-03-23 - Sleeve Portfolio Framing
+
+The project is no longer just searching for one strategy to beat `SPY` outright.
+
+It is now explicitly searching for multiple sleeves that may later be combined into a stronger total portfolio.
+
+### What We Now Have
+
+- a first credible `momentum / trend` sleeve candidate in futures-style instruments
+- evidence that this sleeve can improve a blended `SPY + sleeve` portfolio even though it does not yet beat `SPY` standalone
+
+### What This Changes
+
+We should now search for the `next` sleeve rather than asking the momentum sleeve to do everything.
+
+Current lane split:
+
+- `momentum / trend`:
+  - continue in futures
+  - maintain the existing forecastability -> shortlist -> forecast -> backtest funnel
+- `mean reversion`:
+  - begin as a second research lane
+  - start in liquid equity / sector ETFs where the strategy-instrument fit is more natural
+
+### First Mean Reversion Universe
+
+The codebase now has a `mean_reversion_equity` universe preset built around:
+
+- `SPY, QQQ, IWM, DIA`
+- `XLK, XLF, XLE, XLU, XLI, XLP, XLV`
+- `SMH`
+
+### Mean Reversion Doctrine
+
+- search shorter horizons first
+- prefer structure consistent with snapback rather than persistence
+- judge the sleeve both:
+  - standalone
+  - and as a diversifier against `SPY` and the futures momentum sleeve
+
+### Explicit To-Dos
+
+- continue refining the first futures momentum sleeve
+- continue refining the first equity mean-reversion sleeve
+- maintain a `winner board` for each sleeve family so the best:
+  - instruments
+  - horizons
+  - model families
+  - trading-shell variants
+  stay visible across sessions
+
+Broad-search to-dos:
+
+- eventually sweep across the broad futures universe for the momentum sleeve, not just the current shortlist
+- eventually sweep across a much broader liquid equity / sector / thematic ETF universe for the mean-reversion sleeve
+- treat current shortlists as staging filters, not as the final universe boundary
+- assume there may still be important instruments we are missing until the broad sweeps are done
+
+### Architecture To-Do
+
+Keep researching the current shared multi-instrument forecasting architecture.
+
+Current winner uses:
+
+- one shared forecaster
+- many instruments
+- one target horizon per run
+- repeated walk-forward retraining
+
+That architecture is now a real research object in its own right and should not be discarded just because it is not a true joint multi-output model.
+
+Future exploration paths:
+
+- compare shared single-target forecasters against more explicitly multi-output architectures
+- compare shared forecasters against per-instrument models where sample size allows
+- keep separating:
+  - `forecast model quality`
+  - `decision rule quality`
+
+### Decision Layer To-Do
+
+The current trading shell is still simple:
+
+- rank forecasts
+- take the top `k`
+- rebalance on a fixed cadence
+
+That is useful as a baseline, but it is not the end state.
+
+Future decision-layer research should include:
+
+- optimization over forecast and uncertainty jointly
+- portfolio construction that explicitly trades off:
+  - expected return
+  - uncertainty
+  - turnover
+  - diversification
+  - drawdown control
+- longer-term reward optimization rather than one fixed local rule
+
+Possible future avenue:
+
+- a decision optimizer that consumes forecasts plus uncertainty and learns a policy for long-term reward
+- potentially RL-like, but only after we have strong benchmark decision rules and careful validation discipline
+
 ### Operating Note
 
 Do not rely on chat memory alone for project state. This file is the durable source of truth for:

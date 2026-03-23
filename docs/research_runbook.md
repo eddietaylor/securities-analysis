@@ -456,3 +456,98 @@ When discussing momentum research:
 - do not default back to `SPY`
 - default to macro / futures-like exposures first
 - treat equity ETFs mainly as controls unless evidence clearly says otherwise
+
+## Mean Reversion Direction
+
+The project should now be treated as a multi-sleeve search.
+
+Current sleeve doctrine:
+
+- `momentum / trend`: futures-first
+- `mean reversion`: liquid equity and sector ETF first
+
+Why:
+
+- recent work found the first credible momentum sleeve in futures-style instruments and slower horizons
+- the instrument/strategy-fit report suggests mean reversion is more naturally researched in highly liquid equity-like markets than in classic trend-following futures contexts
+
+### First Mean Reversion Universe
+
+Use the `mean_reversion_equity` preset:
+
+- broad index ETFs:
+  - `SPY`
+  - `QQQ`
+  - `IWM`
+  - `DIA`
+- sector and thematic ETFs:
+  - `XLK`
+  - `XLF`
+  - `XLE`
+  - `XLU`
+  - `XLI`
+  - `XLP`
+  - `XLV`
+  - `SMH`
+
+Why this universe:
+
+- deep liquidity
+- clean and accessible data
+- plausible short/medium-horizon overreaction and snapback structure
+- tradable inside the current stack
+
+### First Mean Reversion Workflow
+
+1. run a high-level structural scan on the `mean_reversion_equity` universe
+2. prioritize diagnostics friendly to mean reversion:
+   - negative short-lag autocorrelation
+   - variance ratios below `1`
+   - weak persistence and stronger snapback behavior
+3. shortlist the best `instrument x horizon` pockets
+4. run explicit mean-reversion backtests only on that shortlist
+5. test the resulting sleeve as a blend component against:
+   - `SPY`
+   - the futures momentum sleeve
+
+### Candidate Mean Reversion Horizons
+
+Do not assume momentum horizons carry over.
+
+Start with a shorter horizon grid such as:
+
+- `2, 3, 5, 10, 15, 20`
+
+and let the data decide whether the sleeve is truly short-horizon or somewhat slower.
+
+## Broad Sweep Doctrine
+
+Shortlists are useful, but they are not the end state.
+
+We should assume there may still be important winners we have not seen until the broader sleeve-specific universes have been swept.
+
+### Momentum To-Do
+
+- eventually sweep the broad futures universe for the momentum sleeve
+- keep the forecastability scan as the cheap first-stage filter
+- keep a persistent momentum `winner board` tracking:
+  - best contracts
+  - best horizons
+  - best model families
+  - best trading-shell variants
+
+### Mean Reversion To-Do
+
+- eventually sweep a much broader liquid equity / sector / thematic ETF universe for the mean-reversion sleeve
+- keep the structural mean-reversion scan as the cheap first-stage filter
+- keep a persistent mean-reversion `winner board` tracking:
+  - best symbols
+  - best horizons
+  - best entry/exit parameter neighborhoods
+  - best trading-shell variants
+
+### Why This Matters
+
+- current shortlists are practical filters
+- they are not proof that the global winners are already known
+- broad sleeve-specific sweeps are necessary if we want the final portfolio to reflect the best opportunities rather than the first opportunities we happened to test

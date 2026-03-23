@@ -77,6 +77,21 @@ MOMENTUM_FIT_FUTURES_UNIVERSE: tuple[UniverseSymbol, ...] = (
     UniverseSymbol("CL=F", "future", "momentum_futures", "crude_oil_future"),
 )
 
+MEAN_REVERSION_EQUITY_UNIVERSE: tuple[UniverseSymbol, ...] = (
+    UniverseSymbol("SPY", "equity", "mean_reversion_equity", "broad_us_equity"),
+    UniverseSymbol("QQQ", "equity", "mean_reversion_equity", "growth_us_equity"),
+    UniverseSymbol("IWM", "equity", "mean_reversion_equity", "small_cap_us_equity"),
+    UniverseSymbol("DIA", "equity", "mean_reversion_equity", "industrial_large_cap"),
+    UniverseSymbol("XLK", "equity", "mean_reversion_sector", "technology"),
+    UniverseSymbol("XLF", "equity", "mean_reversion_sector", "financials"),
+    UniverseSymbol("XLE", "equity", "mean_reversion_sector", "energy"),
+    UniverseSymbol("XLU", "equity", "mean_reversion_sector", "utilities"),
+    UniverseSymbol("XLI", "equity", "mean_reversion_sector", "industrials"),
+    UniverseSymbol("XLP", "equity", "mean_reversion_sector", "consumer_staples"),
+    UniverseSymbol("XLV", "equity", "mean_reversion_sector", "health_care"),
+    UniverseSymbol("SMH", "equity", "mean_reversion_thematic", "semiconductors"),
+)
+
 FUTURES_BROAD_UNIVERSE: tuple[UniverseSymbol, ...] = (
     UniverseSymbol("ES=F", "future", "equity_index_future", "sp500"),
     UniverseSymbol("NQ=F", "future", "equity_index_future", "nasdaq100"),
@@ -109,6 +124,7 @@ UNIVERSE_PRESETS: dict[str, tuple[UniverseSymbol, ...]] = {
     "momentum_macro": MOMENTUM_FIT_MACRO_UNIVERSE,
     "momentum_crypto": MOMENTUM_FIT_CRYPTO_UNIVERSE,
     "momentum_futures": MOMENTUM_FIT_FUTURES_UNIVERSE,
+    "mean_reversion_equity": MEAN_REVERSION_EQUITY_UNIVERSE,
     "futures_broad": FUTURES_BROAD_UNIVERSE,
 }
 
