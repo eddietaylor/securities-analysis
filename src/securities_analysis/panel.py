@@ -11,7 +11,11 @@ import pandas as pd
 
 from securities_analysis.strategies.forecast_features import (
     build_forecast_feature_vector,
+    forecast_feature_families,
+    forecast_feature_family_by_name,
     forecast_feature_names,
+    forecast_feature_presets,
+    resolve_feature_families,
 )
 
 
@@ -166,10 +170,14 @@ def build_panel_dataset(
     horizons: list[int],
     periods_per_year: int,
     metadata_map: dict[str, UniverseSymbol] | None = None,
+    feature_families: list[str] | tuple[str, ...] | None = None,
+    feature_preset: str | None = None,
+    enhanced_context_features: bool = False,
 ) -> pd.DataFrame:
     rows: list[dict[str, object]] = []
     metadata_map = metadata_map or default_panel_metadata()
-    feature_names = forecast_feature_names()
+    resolved_feature_families = resolve_feature_families(families=feature_families, preset=feature_preset)
+    feature_names = forecast_feature_names(families=resolved_feature_families)
 
     for symbol in symbols:
         bars = history_provider.get_historical_prices(
@@ -188,6 +196,7 @@ def build_panel_dataset(
             periods_per_year=periods_per_year,
             feature_names=feature_names,
             metadata=metadata_map.get(symbol),
+            feature_families=resolved_feature_families,
         )
         if not symbol_frame.empty:
             rows.extend(symbol_frame.to_dict(orient="records"))
@@ -196,7 +205,7 @@ def build_panel_dataset(
         return pd.DataFrame()
     frame = pd.DataFrame(rows)
     frame = frame.sort_values(["timestamp", "symbol"]).reset_index(drop=True)
-    frame = _add_multivariate_context_features(frame)
+    frame = _add_multivariate_context_features(frame, include_enhanced_context=enhanced_context_features)
     return frame
 
 
@@ -215,7 +224,25 @@ def save_panel_dataset(
         "start": str(frame["timestamp"].min()) if not frame.empty else "",
         "end": str(frame["timestamp"].max()) if not frame.empty else "",
         "feature_columns": [column for column in frame.columns if column.startswith("feature_")],
+        "feature_families": forecast_feature_families(),
+        "feature_family_by_name": forecast_feature_family_by_name(),
+        "feature_presets": forecast_feature_presets(),
         "context_columns": [column for column in frame.columns if column.startswith("context_")],
+        "context_feature_groups": {
+            "market_mean": [column for column in frame.columns if column.startswith("context_market_mean_")],
+            "bucket_mean": [column for column in frame.columns if column.startswith("context_bucket_mean_")],
+            "market_std": [column for column in frame.columns if column.startswith("context_market_std_")],
+            "bucket_std": [column for column in frame.columns if column.startswith("context_bucket_std_")],
+            "market_breadth": [column for column in frame.columns if column.startswith("context_market_positive_fraction_")],
+            "bucket_breadth": [column for column in frame.columns if column.startswith("context_bucket_positive_fraction_")],
+            "relative_state": [column for column in frame.columns if column.startswith("context_rel_")],
+            "reference_symbol": [
+                column for column in frame.columns if column.startswith("context_") and "/_" not in column and column.count("_") >= 3
+                and not column.startswith("context_market_")
+                and not column.startswith("context_bucket_")
+                and not column.startswith("context_rel_")
+            ],
+        },
         "target_columns": [column for column in frame.columns if column.startswith("target_")],
         "config": config,
     }
@@ -233,6 +260,7 @@ def _build_symbol_panel_frame(
     periods_per_year: int,
     feature_names: list[str],
     metadata: UniverseSymbol | None,
+    feature_families: list[str] | tuple[str, ...] | None,
 ) -> pd.DataFrame:
     if bars_df.empty:
         return pd.DataFrame()
@@ -262,6 +290,7 @@ def _build_symbol_panel_frame(
             lookback_bars=lookback_bars,
             vol_lookback_bars=vol_lookback_bars,
             timestamp=timestamp.to_pydatetime() if hasattr(timestamp, "to_pydatetime") else timestamp,
+            families=feature_families,
         )
         if features is None:
             continue
@@ -308,17 +337,20 @@ def default_panel_output_dir(*, freq: str) -> Path:
     return Path("artifacts") / "panel_datasets" / f"{freq}_{stamp}"
 
 
-def _add_multivariate_context_features(frame: pd.DataFrame) -> pd.DataFrame:
+def _add_multivariate_context_features(frame: pd.DataFrame, *, include_enhanced_context: bool = False) -> pd.DataFrame:
     if frame.empty:
         return frame
 
     working = frame.copy()
-    context_source_columns = [
+    preferred_context_source_columns = [
         "feature_ret_5",
         "feature_ret_20",
         "feature_vol_20",
         "feature_drawdown_depth",
     ]
+    context_source_columns = [column for column in preferred_context_source_columns if column in working.columns]
+    if not context_source_columns:
+        return working
 
     # Add bucket-level averages excluding the current row where possible.
     for column in context_source_columns:
@@ -337,6 +369,39 @@ def _add_multivariate_context_features(frame: pd.DataFrame) -> pd.DataFrame:
             (overall_sum - working[column]) / (overall_count - 1),
             np.nan,
         )
+
+    if include_enhanced_context:
+        # Add dispersion and breadth style state features at the bucket and market level.
+        for column in ["feature_ret_5", "feature_ret_20", "feature_vol_20"]:
+            if column not in working.columns:
+                continue
+            suffix = column.removeprefix("feature_")
+            working[f"context_bucket_std_{suffix}"] = working.groupby(["timestamp", "universe_bucket"])[column].transform("std")
+            working[f"context_market_std_{suffix}"] = working.groupby("timestamp")[column].transform("std")
+
+        for column in ["feature_ret_5", "feature_ret_20"]:
+            if column not in working.columns:
+                continue
+            suffix = column.removeprefix("feature_")
+            bucket_positive = working.groupby(["timestamp", "universe_bucket"])[column].transform(lambda series: np.mean(series > 0.0))
+            market_positive = working.groupby("timestamp")[column].transform(lambda series: np.mean(series > 0.0))
+            working[f"context_bucket_positive_fraction_{suffix}"] = bucket_positive.astype(float)
+            working[f"context_market_positive_fraction_{suffix}"] = market_positive.astype(float)
+
+        # Relative-state features: how the target differs from the surrounding market state.
+        relative_pairs = [
+            ("feature_ret_5", "context_bucket_mean_ret_5", "context_rel_bucket_ret_5"),
+            ("feature_ret_5", "context_market_mean_ret_5", "context_rel_market_ret_5"),
+            ("feature_ret_20", "context_bucket_mean_ret_20", "context_rel_bucket_ret_20"),
+            ("feature_ret_20", "context_market_mean_ret_20", "context_rel_market_ret_20"),
+            ("feature_vol_20", "context_bucket_mean_vol_20", "context_rel_bucket_vol_20"),
+            ("feature_vol_20", "context_market_mean_vol_20", "context_rel_market_vol_20"),
+            ("feature_drawdown_depth", "context_bucket_mean_drawdown_depth", "context_rel_bucket_drawdown_depth"),
+            ("feature_drawdown_depth", "context_market_mean_drawdown_depth", "context_rel_market_drawdown_depth"),
+        ]
+        for own_column, anchor_column, output_column in relative_pairs:
+            if own_column in working.columns and anchor_column in working.columns:
+                working[output_column] = working[own_column] - working[anchor_column]
 
     # Add reference-symbol context features when those reference instruments exist in the same universe.
     reference_symbols = ["SPY", "QQQ", "TLT", "GLD", "BTC/USD", "ETH/USD"]

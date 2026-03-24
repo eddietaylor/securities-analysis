@@ -551,3 +551,89 @@ We should assume there may still be important winners we have not seen until the
 - current shortlists are practical filters
 - they are not proof that the global winners are already known
 - broad sleeve-specific sweeps are necessary if we want the final portfolio to reflect the best opportunities rather than the first opportunities we happened to test
+
+## Deterministic Benchmarking Rule
+
+For CatBoost-based momentum experiments, there are now two modes of work:
+
+- fast exploratory runs
+- deterministic benchmark runs
+
+Why this matters:
+
+- the recent feature-ablation work showed that small fit differences can change forecast ranking enough to move the top-`k` portfolio materially
+- the data and configuration may stay the same while the sleeve equity curve still shifts
+
+So benchmark comparisons should use deterministic settings.
+
+### Rule
+
+For any run that is meant to serve as:
+
+- the current winner
+- a benchmark for feature ablation
+- a benchmark for decision-rule comparison
+
+use:
+
+- fixed seed
+- fixed row ordering
+- `--catboost-thread-count 1`
+
+Use multi-core CatBoost only for cheaper exploratory search when exact reproducibility is less important.
+
+### Current Deterministic Momentum Benchmark
+
+Reference benchmark:
+
+- universe:
+  - `CT=F, ZC=F, 6B=F, RB=F, 6E=F, ZS=F, GC=F, ZB=F, ES=F`
+- horizon:
+  - `120`
+- feature stack:
+  - `all`
+- model:
+  - CatBoost with `thread_count = 1`
+- trading shell:
+  - long-only
+  - top `3`
+  - rebalance every `5` dates
+
+Current benchmark result:
+
+- purged forecast correlation around `0.260`
+- cumulative return around `187.72%`
+- Sharpe around `0.366`
+
+This is the stable momentum reference point for future feature-family and decision-layer research unless and until a new deterministic benchmark clearly surpasses it.
+
+## Feature Engineering Handoff
+
+Current state of the feature-engineering work:
+
+- feature families and presets now exist
+- CLI ablations are supported
+- deterministic benchmarking for CatBoost is supported
+- richer cross-asset context features exist, but are gated behind:
+  - `--enhanced-context-features`
+
+Current rule:
+
+- do not enable enhanced context features by default in benchmark comparisons
+- use them only as explicit experiments
+
+Reason:
+
+- the first richer-context experiment degraded the deterministic momentum benchmark rather than improving it
+
+## Next Mean Reversion Research To-Do
+
+At the start of the next session:
+
+- review the user's GPT deep research report on mean-reversion algorithms and models that have been shown to work
+- map the report's recommended MR model families and decision rules into:
+  - candidate model baselines
+  - candidate feature families
+  - candidate execution / decision-shell choices
+
+That review should guide the next serious MR modeling step rather than continuing with generic rule tweaking alone.

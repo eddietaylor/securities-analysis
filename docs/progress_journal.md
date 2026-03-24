@@ -151,7 +151,7 @@ Broad-search to-dos:
 
 Keep researching the current shared multi-instrument forecasting architecture.
 
-Current winner uses:
+Current momentum architecture uses:
 
 - one shared forecaster
 - many instruments
@@ -159,6 +159,48 @@ Current winner uses:
 - repeated walk-forward retraining
 
 That architecture is now a real research object in its own right and should not be discarded just because it is not a true joint multi-output model.
+
+### Deterministic Benchmark Note
+
+One important lesson from the recent feature-ablation work:
+
+- sleeve-level backtest results were sensitive to small changes in forecast ranking
+- those ranking changes were not coming from changing data
+- they were coming from small fitting differences in repeated CatBoost retraining
+
+So the project should now distinguish between:
+
+- fast exploratory CatBoost runs
+- deterministic benchmark CatBoost runs
+
+Current rule:
+
+- exploratory work may still use multi-core CatBoost for speed
+- any benchmark used for sleeve comparison should use deterministic settings
+  - especially `catboost_thread_count = 1`
+  - fixed seed
+  - fixed row ordering
+
+Current deterministic momentum benchmark:
+
+- shared CatBoost forecaster
+- shortlist universe:
+  - `CT=F, ZC=F, 6B=F, RB=F, 6E=F, ZS=F, GC=F, ZB=F, ES=F`
+- horizon:
+  - `h120`
+- feature preset:
+  - `all` (equivalent to `momentum_core + calendar_state`)
+- trading shell:
+  - long-only top `3`
+  - rebalance every `5` dates
+
+Deterministic benchmark result:
+
+- purged forecast correlation around `0.260`
+- cumulative return around `187.72%`
+- Sharpe around `0.366`
+
+This should now be treated as the official momentum reference point for future ablations and decision-rule research.
 
 Future exploration paths:
 
@@ -804,3 +846,161 @@ So the research program should stay broad inside futures rather than collapsing 
 - linear ridge remains the honest baseline
 - CatBoost is the nonlinear benchmark worth keeping
 - next model work should focus on the best futures and the empirically strongest horizons
+
+## 2026-03-24 - Feature Pipeline Direction
+
+The new GPT deep research note on feature engineering clarified an important weakness in the current forecasting stack:
+
+- our current features are still mostly derived from each instrument's own price history
+- plus a thin layer of cross-asset context
+- plus a few hand-coded regime flags
+
+That was enough to find the first credible sleeves, but it is not enough for the next stage.
+
+### Main conclusion
+
+We should stop thinking in terms of:
+
+- "add a few more indicators"
+
+and move to:
+
+- a real, layered feature engineering pipeline
+
+### Pipeline doctrine
+
+Feature engineering should be tied to:
+
+- strategy family
+- operating horizon
+- economic mechanism
+- execution / cost assumptions
+
+### Proposed pipeline layers
+
+1. structured price-state features
+- multi-horizon returns
+- skip-period momentum where relevant
+- volatility scaling
+- trend slope / crossover / breakout state
+- drawdown and range state
+
+2. cross-asset and relative features
+- relative strength vs peers / benchmark
+- residual momentum
+- correlation-regime features
+- market / peer confirmation or disagreement
+
+3. tradability and cost features
+- dollar volume
+- spread proxies
+- impact proxies
+- liquidity regime filters
+
+4. macro-regime features
+- rates / inflation / growth / policy proxies
+- cross-asset regime state
+- stress and volatility regime state
+
+5. event features
+- earnings windows for equity sleeves
+- macro release windows
+- embargo / cooldown flags
+
+6. textual / fundamental exogenous features
+- news sentiment
+- sentiment surprise vs baseline
+- filing recency
+- filing / 10-K / 10-Q derived features
+
+### Important sequencing
+
+Do not jump to text first.
+
+Best order:
+
+1. strengthen structured market-state features
+2. add cross-asset and macro layers
+3. add cost / tradability layers
+4. only then add sparse text / filings features
+
+### Sleeve-specific implication
+
+For `futures momentum`:
+
+- prioritize:
+  - structured trend and volatility features
+  - relative and macro features
+  - liquidity / cost controls
+- deprioritize for now:
+  - `10-K`
+  - company news
+
+For `equity mean reversion`:
+
+- event and textual features are more likely to matter
+- especially:
+  - earnings windows
+  - company news shocks
+  - sentiment reversal / overreaction context
+
+### To-do
+
+- build a formal feature-family registry instead of one monolithic feature vector
+- support strategy-specific feature presets
+- add timestamp-safe joins for exogenous features
+- run ablation tests by feature family
+- keep richer cross-asset context features gated behind an explicit experimental switch unless they clearly beat the deterministic benchmark
+- eventually add:
+  - macro feature ingestion
+  - event calendar ingestion
+  - news sentiment ingestion
+  - filing-derived features for equity sleeves
+
+## 2026-03-24 - Feature Engineering Learnings
+
+Today added and tested the first formal feature-engineering framework upgrades.
+
+### What changed
+
+- refactored forecasting features into named families and presets
+- added ablation support through the CLI
+- added deterministic CatBoost benchmark settings for trustworthy sleeve comparisons
+- tested richer cross-asset context features and found they hurt the current momentum benchmark
+
+### Important result
+
+The current deterministic momentum benchmark remains:
+
+- futures shortlist
+- `h120`
+- full `all` feature preset
+- CatBoost with `thread_count = 1`
+- long-only top `3` portfolio shell
+
+Current benchmark quality:
+
+- purged forecast correlation around `0.260`
+- cumulative return around `187.72%`
+- Sharpe around `0.366`
+
+### Negative but useful result
+
+Richer experimental context features:
+
+- market/bucket dispersion
+- market/bucket breadth
+- relative-state context spreads
+
+made the current momentum benchmark worse rather than better.
+
+Implication:
+
+- more cross-asset context is not automatically helpful
+- keep those richer context features opt-in and experimental for now
+
+### Next-session To-Do
+
+- review the user's GPT deep research report on mean-reversion algorithms and models that have been shown to work
+- extract the practical MR model families and decision rules from that report
+- use that report to sharpen the next mean-reversion research roadmap
