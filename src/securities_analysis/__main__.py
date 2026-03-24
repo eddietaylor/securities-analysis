@@ -65,6 +65,10 @@ from securities_analysis.shortlist_research import (
 from securities_analysis.services.mvp_execution import MvpExecutionService
 from securities_analysis.services.paper_trading import PaperTradingService
 from securities_analysis.strategies import StrategyProtocol, build_strategy
+from securities_analysis.strategies.forecast_features import (
+    forecast_feature_families,
+    forecast_feature_presets,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -426,6 +430,23 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["alpaca", "yfinance"],
         help="Historical market data provider for the panel dataset. Use yfinance for deeper equity/ETF history.",
     )
+    panel_parser.add_argument(
+        "--feature-preset",
+        choices=sorted(forecast_feature_presets()),
+        help="Optional forecast feature preset, e.g. momentum_core or mean_reversion_core.",
+    )
+    panel_parser.add_argument(
+        "--feature-families",
+        help=(
+            "Optional comma-separated forecast feature families to include. "
+            f"Available: {','.join(sorted(forecast_feature_families()))}"
+        ),
+    )
+    panel_parser.add_argument(
+        "--enhanced-context-features",
+        action="store_true",
+        help="Enable the richer experimental cross-asset context layer. Off by default for benchmark stability.",
+    )
 
     panel_forecast_parser = subparsers.add_parser(
         "panel-forecast",
@@ -530,6 +551,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=0.15,
         help="Fraction of each training window reserved as the CatBoost validation slice.",
+    )
+    panel_forecast_parser.add_argument(
+        "--catboost-thread-count",
+        type=int,
+        default=-1,
+        help="Thread count for CatBoost. Use 1 for more reproducible benchmark runs.",
     )
     panel_forecast_parser.add_argument(
         "--include-symbol-identity",
@@ -843,6 +870,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Fraction of each training window reserved as the CatBoost validation slice.",
     )
     shortlist_parser.add_argument(
+        "--catboost-thread-count",
+        type=int,
+        default=-1,
+        help="Thread count for CatBoost. Use 1 for more reproducible benchmark runs.",
+    )
+    shortlist_parser.add_argument(
         "--include-symbol-identity",
         action="store_true",
         help="Include target symbol identity as a categorical input.",
@@ -855,6 +888,23 @@ def build_parser() -> argparse.ArgumentParser:
     shortlist_parser.add_argument(
         "--output-dir",
         help="Optional output directory for saved shortlist research artifacts",
+    )
+    shortlist_parser.add_argument(
+        "--feature-preset",
+        choices=sorted(forecast_feature_presets()),
+        help="Optional forecast feature preset used when building the shortlisted panel dataset.",
+    )
+    shortlist_parser.add_argument(
+        "--feature-families",
+        help=(
+            "Optional comma-separated forecast feature families to include in the shortlisted panel dataset. "
+            f"Available: {','.join(sorted(forecast_feature_families()))}"
+        ),
+    )
+    shortlist_parser.add_argument(
+        "--enhanced-context-features",
+        action="store_true",
+        help="Enable the richer experimental cross-asset context layer. Off by default for benchmark stability.",
     )
 
     return parser
@@ -1202,6 +1252,9 @@ def main() -> None:
             horizons=_parse_int_grid(args.horizons),
             periods_per_year=periods_per_year,
             metadata_map=metadata_map,
+            feature_families=_parse_str_list(args.feature_families) if args.feature_families else None,
+            feature_preset=args.feature_preset,
+            enhanced_context_features=args.enhanced_context_features,
         )
         artifact_dir = save_panel_dataset(
             frame,
@@ -1217,6 +1270,9 @@ def main() -> None:
                 "lookback_bars": args.lookback_bars,
                 "vol_lookback_bars": args.vol_lookback_bars,
                 "horizons": _parse_int_grid(args.horizons),
+                "feature_families": _parse_str_list(args.feature_families) if args.feature_families else [],
+                "feature_preset": args.feature_preset or "",
+                "enhanced_context_features": args.enhanced_context_features,
             },
         )
         print(
@@ -1248,6 +1304,7 @@ def main() -> None:
                 catboost_bagging_temperature=args.catboost_bagging_temperature,
                 catboost_early_stopping_rounds=args.catboost_early_stopping_rounds,
                 catboost_validation_fraction=args.catboost_validation_fraction,
+                catboost_thread_count=args.catboost_thread_count,
                 include_symbol_identity=args.include_symbol_identity,
                 include_bucket_metadata=not args.exclude_bucket_metadata,
             ),
@@ -1360,10 +1417,14 @@ def main() -> None:
                 catboost_bagging_temperature=args.catboost_bagging_temperature,
                 catboost_early_stopping_rounds=args.catboost_early_stopping_rounds,
                 catboost_validation_fraction=args.catboost_validation_fraction,
+                catboost_thread_count=args.catboost_thread_count,
                 include_symbol_identity=args.include_symbol_identity,
                 include_bucket_metadata=not args.exclude_bucket_metadata,
             ),
             output_dir=args.output_dir or default_shortlist_research_output_dir(),
+            feature_families=_parse_str_list(args.feature_families) if args.feature_families else None,
+            feature_preset=args.feature_preset,
+            enhanced_context_features=args.enhanced_context_features,
         )
         print(
             "SHORTLIST RESEARCH COMPLETE | "

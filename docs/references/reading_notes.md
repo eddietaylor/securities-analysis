@@ -448,3 +448,210 @@ Future decision-layer research ideas:
   - strong benchmark decision rules exist
   - uncertainty estimates are credible
   - validation discipline for policy learning is well defined
+
+## GPT Deep Research: Feature Engineering And Selection
+
+Reference:
+
+- `docs/references/GPT Deep Research Feature Engineering and Selection for Algorithmic Trading Strategies.pdf`
+
+Most important takeaway:
+
+- feature engineering should be explicitly tied to:
+  - the strategy's economic mechanism
+  - the operating horizon
+  - the execution and cost model
+
+This strongly supports a layered feature pipeline rather than one generic bag of indicators.
+
+### What The Report Reinforces
+
+- `momentum / trend` at daily-to-monthly horizons should be built mainly from:
+  - multi-horizon return aggregation
+  - relative strength
+  - volatility scaling
+  - trend slope / crossover / breakout structure
+  - liquidity and cost controls
+  - macro regime filters
+- `mean reversion` should emphasize:
+  - z-scored deviations
+  - short-term reversal structure
+  - volatility regime
+  - event / news gates
+  - and, for intraday work, microstructure features
+- validation and selection discipline matter as much as the features:
+  - causal construction only
+  - purged / embargoed validation when labels overlap
+  - avoid feature mining by endless variant search
+- transaction costs should be treated as part of feature design:
+  - spread, liquidity, and impact proxies are not optional filters
+
+### Implication For This Repo
+
+Our current forecasting features are still mostly:
+
+- self-derived from each instrument's own price history
+- plus a small amount of cross-asset context
+- plus a few hand-coded regime flags
+
+That is a reasonable first generation, but it is not yet a real feature engineering pipeline.
+
+### Proposed Feature Pipeline Layers
+
+#### Layer 1: Core Price-State Features
+
+Keep and expand the current base:
+
+- multi-horizon cumulative returns
+- skip-period momentum such as `12-1` style constructions where relevant
+- realized volatility and volatility ratios
+- moving-average spreads, slopes, and crossover strength
+- breakout / range position features
+- drawdown and distance-from-extremes state
+
+Why:
+
+- this is still the core of the current futures momentum sleeve
+- the report reinforces that these should remain the foundation
+
+#### Layer 2: Cross-Asset And Relative Features
+
+Add more explicit relative-state features:
+
+- relative strength versus benchmark or peer group
+- residual momentum after controlling for broad factors
+- rolling correlation / correlation-regime features
+- cross-asset confirmation or disagreement signals
+- market concentration and dispersion measures
+
+Why:
+
+- our current `context_*` features are a start, but still quite shallow
+- the report strongly supports cross-asset and relative constructions for momentum and trend
+
+#### Layer 3: Execution / Tradability Features
+
+Add features that model whether the signal is worth trading:
+
+- dollar volume trend
+- spread proxies
+- impact proxies
+- turnover pressure
+- liquidity regime indicators
+
+Why:
+
+- the report is very explicit that cost-aware features can be core, not decorative
+- this matters especially if we later expand beyond daily ETF work
+
+#### Layer 4: Macro And Regime Features
+
+Move beyond hand-coded event flags:
+
+- rates level and slope proxies
+- inflation / growth / policy surprise proxies
+- commodity and dollar regime features
+- volatility regime features
+- stress / flight-to-safety state proxies
+
+Why:
+
+- the report repeatedly frames macro regime as an important secondary filter for momentum / trend
+- this is especially relevant to our futures-first sleeve
+
+#### Layer 5: Event Features
+
+Add explicit event-state columns with causal lags:
+
+- scheduled macro release windows
+- earnings windows for equity mean reversion work
+- event embargo flags
+- post-event decay features
+
+Why:
+
+- the report treats event filters as especially important for mean reversion and breakouts
+- this is a safer early exogenous-data layer than jumping straight to raw text
+
+#### Layer 6: Textual / Fundamental Exogenous Features
+
+This is where ideas like `10-K`, `10-Q`, and news sentiment belong.
+
+Candidate additions:
+
+- lagged news sentiment
+- sentiment surprise versus trailing baseline
+- filing sentiment / topic flags
+- filing recency
+- earnings-call or company-news shock features
+
+Important caution:
+
+- these must be timestamp-aligned to what was truly knowable at decision time
+- they are more natural for equity and cross-sectional sleeves than for the current futures momentum sleeve
+- they should be added only after the structured market-state pipeline is solid
+
+### Priority Sequencing
+
+Best near-term build order:
+
+1. strengthen structured price-state features
+2. add richer cross-asset / relative features
+3. add tradability and liquidity features
+4. add macro-regime features
+5. add event features
+6. only then add textual / filings features
+
+This sequence is important because:
+
+- it captures most of the report's highest-confidence recommendations first
+- it keeps the pipeline auditable
+- it avoids rushing into sparse and leakage-prone text data before the structured baseline is strong
+
+### Strategy-Specific Guidance
+
+For the current `futures momentum` sleeve:
+
+- prioritize:
+  - return aggregation
+  - volatility scaling
+  - breakout / trend structure
+  - relative strength
+  - liquidity / cost filters
+  - macro-regime features
+- deprioritize for now:
+  - `10-K`
+  - company filings
+  - company news sentiment
+
+For the `equity mean reversion` sleeve:
+
+- prioritize:
+  - z-scored deviations
+  - reversal / snapback state
+  - event filters
+  - market / sector context
+  - eventually news and company-level textual features
+
+This is the key distinction:
+
+- `10-K` and company-news features are promising
+- but they are much more likely to help the equity sleeve than the futures momentum sleeve
+
+### Concrete Repo Follow-Up
+
+The repo should evolve toward a real feature pipeline with:
+
+1. feature families registered separately
+2. strategy-specific feature presets
+3. explicit causal lag rules for every exogenous source
+4. feature-store style joins by timestamp and symbol
+5. ablation testing by feature family, not just by individual column
+
+If we do this well, the system will stop being:
+
+- a forecasting model with a handful of hand-written indicators
+
+and start becoming:
+
+- a genuine research platform for structured, multi-source, strategy-aware feature engineering

@@ -41,6 +41,9 @@ def run_shortlist_research(
     periods_per_year: int,
     model_config: PanelForecastConfig,
     output_dir: str | Path,
+    feature_families: list[str] | tuple[str, ...] | None = None,
+    feature_preset: str | None = None,
+    enhanced_context_features: bool = False,
 ) -> ShortlistResearchResult:
     artifact_dir = Path(output_dir)
     artifact_dir.mkdir(parents=True, exist_ok=True)
@@ -84,6 +87,9 @@ def run_shortlist_research(
         horizons=horizons,
         periods_per_year=periods_per_year,
         metadata_map=metadata_map,
+        feature_families=feature_families,
+        feature_preset=feature_preset,
+        enhanced_context_features=enhanced_context_features,
     )
     dataset_artifact_dir = artifact_dir / "dataset"
     save_panel_dataset(
@@ -97,6 +103,9 @@ def run_shortlist_research(
             "lookback_bars": lookback_bars,
             "vol_lookback_bars": vol_lookback_bars,
             "horizons": horizons,
+            "feature_families": list(feature_families) if feature_families else [],
+            "feature_preset": feature_preset or "",
+            "enhanced_context_features": enhanced_context_features,
         },
     )
 
